@@ -1,0 +1,7 @@
+#!/bin/bash -e
+
+mkdir -p /koruza/log/nodewatcher
+chown nobody:nogroup /koruza/log/nodewatcher
+
+exec chpst -u nobody:nogroup svlogd -tt /koruza/log/nodewatcher
+

@@ -1,0 +1,7 @@
+#!/bin/bash -e
+
+mkdir -p /koruza/log/sensors
+chown nobody:nogroup /koruza/log/sensors
+
+exec chpst -u nobody:nogroup svlogd -tt /koruza/log/sensors
+

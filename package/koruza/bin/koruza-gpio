@@ -1,0 +1,85 @@
+#!/usr/bin/python
+
+import RPi.GPIO as GPIO 
+import time 
+import json
+import sys
+import termios
+import tty
+import sqlite3
+
+#Pin definitions per BCM
+led1=19 #status led
+led2=13 #link established 
+led3=12 #motors moving
+sw1=22 #3.3V power rail for laser
+sw2=27 #9V output for SFP, initialize HIGH
+sw3=17 #24V unregulated channel (for heaters and stuff)
+sw4=4 #drain output for 3.3V channel, for laser or similar
+in1=16 #input for reed switch
+
+
+
+#enable pins
+GPIO . setwarnings ( False )
+GPIO . setmode ( GPIO.BCM ) 
+GPIO . setup ( led1, GPIO.OUT )
+GPIO . setup ( led2, GPIO.OUT ) 
+GPIO . setup ( led3, GPIO.OUT ) 
+GPIO . setup ( sw1, GPIO.OUT ) 
+GPIO . setup ( sw2, GPIO.OUT )
+GPIO . setup ( sw3, GPIO.OUT )
+GPIO . setup ( sw4, GPIO.OUT )
+GPIO . setup ( in1, GPIO.IN )
+#set up initial values
+GPIO . output ( led1, GPIO.HIGH)
+GPIO . output ( led2, GPIO.HIGH)
+GPIO . output ( led3, GPIO.HIGH)
+GPIO . output ( sw1, GPIO.LOW)
+GPIO . output ( sw2, GPIO.HIGH)
+GPIO . output ( sw3, GPIO.LOW)
+GPIO . output ( sw4, GPIO.LOW)
+
+status_x = 0
+status_y = 0
+status_f = 0
+rx_power = 0
+
+print("Here we go! Press CTRL+C to exit")
+try:
+    while 1:
+		conn = sqlite3 . connect ( '/var/tmp/koruza/database.db' )
+		cur = conn . cursor ()
+
+		cur . execute ( 'SELECT motor_status_x FROM local' )
+		status_x = cur . fetchone () [ 0 ]
+		cur . execute ( 'SELECT motor_status_y FROM local' )
+                status_y = cur . fetchone () [ 0 ]
+		cur . execute ( 'SELECT motor_status_f FROM local' )
+                status_f = cur . fetchone () [ 0 ]
+		cur . execute ( 'SELECT sfp_rx_power_mw FROM local' )
+                rx_power = cur . fetchone () [ 0 ]
+
+		conn . close () 
+
+
+		#evaluate if moving
+		if int(status_x)==1 or int(status_y)==1 or int(status_f)==1:
+			GPIO . output ( led3, GPIO.HIGH )
+		else:
+			GPIO . output ( led3, GPIO.LOW )
+		#evaluate power
+		if float(rx_power)>10:
+			GPIO . output ( led2, GPIO.HIGH )
+		else:
+			GPIO . output ( led2, GPIO.LOW )
+		#evaluate input
+		if(GPIO.input(sw4) ==1):
+			print "reed"
+		#led1 should blink when all is operating normally
+		GPIO . output ( led1, GPIO.HIGH )
+		time.sleep(0.5)
+		GPIO . output ( led1, GPIO.LOW )
+		time.sleep(0.5)
+except KeyboardInterrupt: # If CTRL+C is pressed, exit cleanly:
+    GPIO.cleanup() # cleanup all GPIO

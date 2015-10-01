@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec /koruza/bin/koruza-nodewatcher 2>&1
+

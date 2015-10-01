@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec /koruza/bin/koruza-sensors 2>&1
+

@@ -1,0 +1,220 @@
+#!/usr/bin/python
+
+import smbus
+import sys
+import json
+import time
+import os.path
+import socket
+import struct
+import sqlite3 
+import RPi.GPIO as GPIO 
+
+from subprocess import call
+print ( 'Start' )
+
+bus = smbus.SMBus(1)
+
+file = open ('/koruza/config/koruza.conf', 'r')
+config = json . load ( file )
+file . close ()
+data={}
+
+def conv ( list, i, div ):
+	a = float ( ( list[i] << 8 ) + list[i+1] )
+	return ( a / div )	
+
+def simpleReadRegisters ( address ):
+    bus. write_byte ( address, 0x00 )
+    list = []
+    for i in range ( 0, 255 ):
+	value = bus . read_byte ( address )
+	list . append ( value )
+    return list
+
+def readRegisters (address,offset,length):
+	bus.write_byte(address,offset)
+	list = []
+	for i in range ( 0, length):
+		value = bus.read_byte(address)
+		list.append(value)
+	return list
+	
+def writeRegisters (address, offset, data):
+	bytes=stringToBytes(data)
+	bus.write_block_data(address, offset, bytes)
+	return
+	
+def stringToBytes(src):
+    converted = []
+    for b in src:
+        converted.append(ord(b))
+    return converted
+	
+
+def getSecondLine ( ):
+	with open ( config [ "1wire_path" ] ) as temp_file:
+		cnt = 0
+		for line in temp_file:
+			cnt += 1
+			if ( cnt == 2 ):
+				return line
+
+def loadDataFromDb ():
+	global data
+	conn = sqlite3 . connect ( '/var/tmp/koruza/database.db' )
+	cur = conn . cursor ()
+
+	#establish values to write to motor controller, shown in packed structure order
+
+	cur . execute ( 'SELECT motor_next_x FROM local' )
+	next_x = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_next_y FROM local' )
+	next_y = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_next_f FROM local' )
+        next_f = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_current_x FROM local' )
+        current_x = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_current_y FROM local' )
+        current_y = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_current_f FROM local' )
+        current_f = cur . fetchone () [ 0 ] # read + write
+        status_x = 0 # write to file
+        status_y = 0 # write to file
+        status_f = 0 # write to file
+        empty = 0 # write to file
+        flash_status = 0 # write to file
+        flash_write_count = 0 # write to file
+	cur . execute ( 'SELECT motor_command FROM local' )
+        command = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_laser FROM local' )
+        gpio = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_speed FROM local' )
+        motor_speed = cur . fetchone () [ 0 ] # read + write
+	cur . execute ( 'SELECT motor_accel FROM local' )
+        motor_accel = cur . fetchone () [ 0 ] # read + write
+
+	data.update({ u"motor_next_x": next_x, u"motor_next_y": next_y, u"motor_next_f": next_f, u"motor_current_x": current_x, u"motor_current_y": current_y, u"motor_current_f": current_f, u"motor_status_x": status_x, u"motor_status_y": status_y, u"motor_status_f": status_f, u"motor_empty": empty, u"motor_flash_status": flash_status, u"motor_flash_write_count": flash_write_count, u"motor_laser": gpio, u"motor_command": command, u"motor_speed": motor_speed, u"motor_accel": motor_accel})
+	conn . close ()
+
+
+def controlMotors ():
+	loadDataFromDb ()
+	global data
+
+	
+	#sending is separate step due to 32 byte buffer limit and due to only some bytes being writable
+	#where the motors should move
+	output_string=struct.pack('=lll', data [ u"motor_next_x" ], data [ u"motor_next_y" ], data [ "motor_next_f" ] )
+	writeRegisters (0x04, 0, output_string) #starting at zero offset
+	#commands and configs
+	output_string=struct.pack('=BBHH',data [ u"motor_command" ], data [ u"motor_laser" ], data [ u"motor_speed" ], data [ u"motor_accel" ] ) 
+	writeRegisters (0x04, 30, output_string) #starting at zero offset
+	
+	#now read values back from the motor short delay advised
+	byte_data = readRegisters (0x4,0,36)
+	byte_data = "".join([chr(x) for x in byte_data])
+	input_string=struct.unpack('=llllllBBBBBBBBHH',byte_data)
+	
+	next_x = input_string[0] #read + write
+	next_y = input_string[1] #read + write
+	next_f = input_string[2] #read + write
+	current_x = input_string[3] #read + write
+	current_y = input_string[4] #read + write
+	current_f = input_string[5] #read + write
+	status_x = input_string[6]  #write to file
+	status_y = input_string[7]  #write to file
+	status_f = input_string[8]  #write to file
+	empty = input_string[9]  #write to file
+	flash_status = input_string[10]  #write to file
+	flash_write_count = input_string[11]  #write to file
+	command = input_string[12]  #read + write
+	gpio = input_string[13]  #read + write
+	motor_speed = input_string[14]  #read + write
+	motor_accel = input_string[15]  #read + write
+
+	data.update({ u"motor_next_x": next_x, u"motor_next_y": next_y, u"motor_next_f": next_f, u"motor_current_x": current_x, u"motor_current_y": current_y, u"motor_current_f": current_f, u"motor_status_x": status_x, u"motor_status_y": status_y, u"motor_status_f": status_f, u"motor_empty": empty, u"motor_flash_status": flash_status, u"motor_flash_write_count": flash_write_count, u"motor_laser": gpio, u"motor_command": command, u"motor_speed": motor_speed, u"motor_accel": motor_accel})
+
+				
+if ( not ( 'w1_therm' in open ( '/proc/modules' ) . read () and 'w1_gpio' in open ( '/proc/modules' ) . read () ) ):
+	call ( [ "modprobe", "wire" ] )
+	call ( [ "modprobe", "w1-gpio" ] )
+	call ( [ "modprobe", "w1-therm" ] )
+
+def readSensors ():
+	global data
+	diag = simpleReadRegisters ( 0x51 )
+	second_line = getSecondLine ()
+
+	temperature_case	= format ( float ( second_line . split ( "=" ) [ 1 ] . rstrip () ) / 1000, '4.10f' )
+	temperature_sfp 	= format ( conv ( diag, 96, 256 ), '4.10f' )
+	vcc 			= format ( conv ( diag, 98, 10000 ), '4.10f' )
+	tx_bias	 		= format ( conv ( diag, 100, 500 ), '5.10f' )
+	tx_power 		= format ( conv ( diag, 102, 10000 ), '2.10f' )
+	rx_power 		= format ( conv ( diag, 104, 10000 ), '.10f' )
+	
+	data.update({ u"case_temperature_c": temperature_case, u"sfp_temperature_c": temperature_sfp, u"sfp_vcc_v": vcc, u"sfp_tx_bias_ma": tx_bias, u"sfp_tx_power_mw": tx_power, u"sfp_rx_power_mw": rx_power})
+
+def writeToDb( ):
+	global data
+	data.update({ u"remote_connected": '1', })
+
+	conn = sqlite3 . connect ( '/var/tmp/koruza/database.db' )
+	cur = conn . cursor ()
+	
+	print data
+			
+
+	cur . execute ( 'UPDATE local SET motor_next_x = ?', (data [ u"motor_next_x" ],) )
+	cur . execute ( 'UPDATE local SET motor_next_y = ?', (data [ u"motor_next_y" ],) )
+	cur . execute ( 'UPDATE local SET motor_next_f = ?', (data [ u"motor_next_f" ],) )
+	cur . execute ( 'UPDATE local SET motor_current_x = ?', (data [ u"motor_current_x" ],) )
+	cur . execute ( 'UPDATE local SET motor_current_y = ?', (data [ u"motor_current_y" ],) )
+	cur . execute ( 'UPDATE local SET motor_current_f = ?', (data [ u"motor_current_f" ],) )
+	cur . execute ( 'UPDATE local SET motor_status_x = ?', (data [ u"motor_status_x" ],) )
+	cur . execute ( 'UPDATE local SET motor_status_y = ?', (data [ u"motor_status_y" ],) )
+	cur . execute ( 'UPDATE local SET motor_status_f = ?', (data [ u"motor_status_f" ],) )
+	cur . execute ( 'UPDATE local SET motor_empty = ?', (data [ u"motor_empty" ],) )
+	cur . execute ( 'UPDATE local SET motor_flash_status = ?', (data [ u"motor_flash_status" ],) )
+	cur . execute ( 'UPDATE local SET motor_flash_write_count = ?', (data [ u"motor_flash_write_count" ],) )
+	cur . execute ( 'UPDATE local SET motor_command = ?', (data [ u"motor_command" ],) )
+	cur . execute ( 'UPDATE local SET motor_laser = ?', (data [ u"motor_laser" ],) )
+	cur . execute ( 'UPDATE local SET motor_speed = ?', (data [ u"motor_speed" ],) )
+	cur . execute ( 'UPDATE local SET motor_accel = ?', (data [ u"motor_accel" ],) )
+	cur . execute ( 'UPDATE local SET remote_connected = ?', (data [ u"remote_connected" ],) )
+	cur . execute ( 'UPDATE local SET sfp_rx_power_mw = ?', (data [ u"sfp_rx_power_mw" ],) )
+	cur . execute ( 'UPDATE local SET case_temperature_c = ?', (data [ u"case_temperature_c" ],) )
+	cur . execute ( 'UPDATE local SET sfp_temperature_c = ?', (data [ u"sfp_temperature_c" ],) )
+	cur . execute ( 'UPDATE local SET sfp_tx_bias_ma = ?', (data [ u"sfp_tx_bias_ma" ],) )
+	cur . execute ( 'UPDATE local SET sfp_tx_power_mw = ?', (data [ u"sfp_tx_power_mw" ],) )
+	cur . execute ( 'UPDATE local SET sfp_vcc_v = ?', (data [ u"sfp_vcc_v" ],) )
+
+	conn . commit ()
+	conn . close ()
+
+	outFile = open ( '/var/tmp/koruza/output.json', 'w' )
+	outFile . write ( json.dumps(data, indent = 2, sort_keys = True ) )
+        outFile . write ( "\n" )
+        outFile . close ()
+
+	data={} #clear data
+
+#perform once
+sfp_info_byte = readRegisters ( 0x50,0,96)
+sfp_info_byte = "".join([chr(x) for x in sfp_info_byte])
+sfp_info=struct.unpack('=BBB8sBBBBBBBBB16sB3s16s4sBBBBHBB16s8sBBBB',sfp_info_byte)
+print 'SFP serial: ' + sfp_info[26]
+print 'SFP model: ' + sfp_info[16]
+#loop
+
+while True:
+	try:
+		while True:
+			controlMotors()
+			readSensors()
+			writeToDb()			 
+	except Exception:
+		print "Unexpected error:", sys.exc_info()[0]
+		GPIO.cleanup()
+	finally:
+		GPIO.cleanup()

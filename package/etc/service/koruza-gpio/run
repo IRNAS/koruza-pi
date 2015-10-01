@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec /koruza/bin/koruza-gpio 2>&1
+

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+rm -rf /koruza /etc/service/koruza-* /var/tmp/koruza
+
