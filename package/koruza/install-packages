@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
 apt-get update
-apt-get install --yes --force-yes runit i2c-tools python-pip libffi-dev libffi5 python-dev
+apt-get install --yes --force-yes runit i2c-tools python-pip libffi-dev libffi5 python-dev python-smbus
 pip install -r /koruza/requirements.txt
 
