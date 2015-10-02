@@ -80,6 +80,11 @@ remote_sfp_vcc_v = 0
 killThread = False
 steps_count = 1
 
+#read config file
+file = open ('/koruza/config/koruza.conf', 'r')
+config = json . load ( file )
+file . close ()
+
 
 def sin100( x ):
 	""".
@@ -116,13 +121,11 @@ class ThreadLoop ( threading . Thread ):
 		global local_motor_laser
 		global killThread
 
-
-		conn = sqlite3 . connect ( '/var/tmp/koruza/database.db' )
-		cur = conn . cursor ()
-
 		while True:
 			if ( killThread == True ):
 				break
+			conn = sqlite3 . connect ( '/var/tmp/koruza/database.db' )
+			cur = conn . cursor ()
 #LOCAL
 			cur . execute ( 'SELECT motor_accel from local' )
 			db_local_motor_accel = cur . fetchone () [ 0 ]
@@ -149,7 +152,7 @@ class ThreadLoop ( threading . Thread ):
 			cur . execute ( 'SELECT motor_next_f from local' )
 			db_local_motor_next_f = cur . fetchone () [ 0 ]
 			cur . execute ( 'SELECT motor_next_x from local' )
-			db_local_motor_next_x = cur . fetchone () [ 0 ]
+			db_local_motor_next_x = int(cur . fetchone () [ 0 ])
 			cur . execute ( 'SELECT motor_next_y from local' )
 			db_local_motor_next_y = cur . fetchone () [ 0 ]
 			cur . execute ( 'SELECT motor_speed from local' )
@@ -314,9 +317,8 @@ class ThreadLoop ( threading . Thread ):
 
 			if change == True:
 				conn . commit ()
-
+			conn . close ()
 			time . sleep ( 0.5 )
-		conn . close ()
 
 class TerminalModel:
 	"""
@@ -914,34 +916,51 @@ class TerminalController:
 		cur . execute ( 'SELECT sfp_vcc_v from remote' )
 		remote_sfp_vcc_v = cur . fetchone () [ 0 ]
 
+		conn . close ()
+
 	def save_data(self):
-		data = {
-			u"motor_next_x": self.local_motor_next_x,
-			u"motor_next_y": self.local_motor_next_y,
-			u"motor_next_f": self.local_motor_next_f,
-			u"motor_current_x": self.local_motor_current_x,
-			u"motor_current_y": self.local_motor_current_y,
-			u"motor_current_f": self.local_motor_current_f,
-			u"motor_max_x": self.local_motor_max_x,
-			u"motor_max_y": self.local_motor_max_y,
-			u"motor_max_f": self.local_motor_max_f,
-			u"motor_status_x": self.local_motor_status_x,
-			u"motor_status_y": self.local_motor_status_y,
-			u"motor_status_f": self.local_motor_status_f,
-			u"motor_speed": self.local_motor_speed,
-			u"motor_accel": self.local_motor_accel,
-			u"motor_command": self.local_motor_command,
-			u"motor_flash_status": self.local_motor_flash_status,
-			u"motor_flash_write_count": self.local_motor_flash_write_count,
-			u"motor_laser": self.local_motor_laser
-		}
-		file = open ( '/var/tmp/koruza/input.json', 'w' )
-		try:
-			file.write ( json.dumps ( data, indent = 2, sort_keys = True ) )
-		except:
-			exit
-		file.write ( "\n" )
-		file.close ()
+		global local_motor_next_x
+		global local_motor_next_y
+		global local_motor_next_f
+		global local_motor_current_x
+		global local_motor_current_y
+		global local_motor_current_f
+		global local_motor_max_x
+		global local_motor_max_y
+		global local_motor_max_f
+		global local_motor_status_x
+		global local_motor_status_y
+		global local_motor_status_f
+		global local_motor_speed
+		global local_motor_accel
+		global local_motor_command
+		global local_motor_flash_status
+		global local_motor_flash_write_count
+		global local_motor_laser
+		global local_remote_connected
+		global local_sfp_rx_power_mw
+		global local_case_temperature_c
+		global local_sfp_temperature_c
+		global local_sfp_tx_bias_ma
+		global local_sfp_tx_power_mw
+		global local_sfp_vcc_v_text
+	
+		conn = sqlite3 . connect (  config [ "database_path" ] )
+		cur = conn . cursor ()
+
+		cur . execute ( 'UPDATE local SET motor_next_x = ?', str(local_motor_next_x))
+		cur . execute ( 'UPDATE local SET motor_next_y = ?', str(local_motor_next_y))
+		cur . execute ( 'UPDATE local SET motor_next_f = ?', str(local_motor_next_f))
+		cur . execute ( 'UPDATE local SET motor_current_x = ?', str(local_motor_current_x))
+		cur . execute ( 'UPDATE local SET motor_current_y = ?', str(local_motor_current_y))
+		cur . execute ( 'UPDATE local SET motor_current_f = ?', str(local_motor_current_f))
+		cur . execute ( 'UPDATE local SET motor_command = ?', str(local_motor_command))
+		cur . execute ( 'UPDATE local SET motor_laser = ?', str(local_motor_laser))
+		#cur . execute ( 'UPDATE local SET motor_speed = ?', str(local_motor_speed))
+		#cur . execute ( 'UPDATE local SET motor_accel = ?', str(local_motor_accel))
+
+		conn . commit ()
+		conn . close ()
 
 	def aim(self, key):
 		#size = self.ui.get_cols_rows()
