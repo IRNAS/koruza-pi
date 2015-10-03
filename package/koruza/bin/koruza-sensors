@@ -1,247 +1,242 @@
 #!/usr/bin/python
 
 import smbus
-import sys
 import json
 import time
-import os.path
-import socket
 import struct
-import sqlite3 
-import RPi.GPIO as GPIO 
-
-from subprocess import call
-from datetime import datetime
-
-#I2C bus
-bus = smbus.SMBus(1)
-
-#read config file
-file = open ('/koruza/config/koruza.conf', 'r')
-config = json . load ( file )
-file . close ()
-#create the measurements variable
-data={u"motor_next_x": 0, u"motor_next_y": 0, u"motor_next_f": 0, u"motor_current_x": 0, u"motor_current_y": 0, u"motor_current_f": 0, u"motor_status_x": 0, u"motor_status_y": 0, u"motor_status_f": 0, u"motor_empty": 0, u"motor_flash_status": 0, u"motor_flash_write_count": 0, u"motor_laser": 0, u"motor_command": 0, u"motor_speed": 0, u"motor_accel": 0, u"case_temperature_c": 0, u"sfp_temperature_c": 0, u"sfp_vcc_v": 0, u"sfp_tx_bias_ma": 0, u"sfp_tx_power_mw": 0, u"sfp_rx_power_mw": 0}
-
-present_i2c_sfp = 0
-present_i2c_motor = 0
-
-def conv ( list, i, div ):
-	a = float ( ( list[i] << 8 ) + list[i+1] )
-	return ( a / div )	
-
-def simpleReadRegisters ( address ):
-    bus. write_byte ( address, 0x00 )
-    list = []
-    for i in range ( 0, 255 ):
-	value = bus . read_byte ( address )
-	list . append ( value )
-    return list
-
-def readRegisters (address,offset,length):
-	try:
-		bus.write_byte(address,offset)
-		list = []
-		for i in range ( 0, length):
-			value = bus.read_byte(address)
-			list.append(value)
-		return list
-	except IOError:
-		print 'i2c motor driver read unavailable'
-		return
-	return
-def writeRegisters (address, offset, data):
-	try:
-		bytes=stringToBytes(data)
-		bus.write_block_data(address, offset, bytes)
-	except IOError:
-		print 'i2c motor driver write unavailable'
-	return
-	
-def stringToBytes(src):
-    converted = []
-    for b in src:
-        converted.append(ord(b))
-    return converted
-	
-
-def getSecondLine ( ):
-	with open ( config [ "1wire_path" ] ) as temp_file:
-		cnt = 0
-		for line in temp_file:
-			cnt += 1
-			if ( cnt == 2 ):
-				return line
-
-def loadDataFromDb ():
-	global data
-	conn = sqlite3 . connect ( config [ "database_path" ] )
-	cur = conn . cursor ()
-
-	#establish values to write to motor controller, shown in packed structure order
-
-	cur . execute ( 'SELECT motor_next_x FROM local' )
-	next_x = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_next_y FROM local' )
-	next_y = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_next_f FROM local' )
-        next_f = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_current_x FROM local' )
-        current_x = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_current_y FROM local' )
-        current_y = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_current_f FROM local' )
-        current_f = cur . fetchone () [ 0 ] # read + write
-        status_x = 0 # write to file
-        status_y = 0 # write to file
-        status_f = 0 # write to file
-        empty = 0 # write to file
-        flash_status = 0 # write to file
-        flash_write_count = 0 # write to file
-	cur . execute ( 'SELECT motor_command FROM local' )
-        command = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_laser FROM local' )
-        gpio = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_speed FROM local' )
-        motor_speed = cur . fetchone () [ 0 ] # read + write
-	cur . execute ( 'SELECT motor_accel FROM local' )
-        motor_accel = cur . fetchone () [ 0 ] # read + write
-
-	data.update({ u"motor_next_x": next_x, u"motor_next_y": next_y, u"motor_next_f": next_f, u"motor_current_x": current_x, u"motor_current_y": current_y, u"motor_current_f": current_f, u"motor_status_x": status_x, u"motor_status_y": status_y, u"motor_status_f": status_f, u"motor_empty": empty, u"motor_flash_status": flash_status, u"motor_flash_write_count": flash_write_count, u"motor_laser": gpio, u"motor_command": command, u"motor_speed": motor_speed, u"motor_accel": motor_accel})
-	conn . close ()
+import sqlite3
+import subprocess
 
 
-def controlMotors ():
-	loadDataFromDb ()
-	global data
+CONFIG_FILE = '/koruza/config/koruza.conf'
 
-	
-	#sending is separate step due to 32 byte buffer limit and due to only some bytes being writable
-	#where the motors should move
-	output_string=struct.pack('=lll', data [ u"motor_next_x" ], data [ u"motor_next_y" ], data [ "motor_next_f" ] )
-	writeRegisters (0x04, 0, output_string) #starting at zero offset
-	#commands and configs
-	output_string=struct.pack('=BBHH',data [ u"motor_command" ], data [ u"motor_laser" ], data [ u"motor_speed" ], data [ u"motor_accel" ] ) 
-	writeRegisters (0x04, 30, output_string) #starting at zero offset
-	
-	try:
-		#now read values back from the motor short delay advised
-		byte_data = readRegisters (0x4,0,36)
-		byte_data = "".join([chr(x) for x in byte_data])
-		input_string=struct.unpack('=llllllBBBBBBBBHH',byte_data)
-		
-		next_x = input_string[0] #read + write
-		next_y = input_string[1] #read + write
-		next_f = input_string[2] #read + write
-		current_x = input_string[3] #read + write
-		current_y = input_string[4] #read + write
-		current_f = input_string[5] #read + write
-		status_x = input_string[6]  #write to file
-		status_y = input_string[7]  #write to file
-		status_f = input_string[8]  #write to file
-		empty = input_string[9]  #write to file
-		flash_status = input_string[10]  #write to file
-		flash_write_count = input_string[11]  #write to file
-		command = input_string[12]  #read + write
-		gpio = input_string[13]  #read + write
-		motor_speed = input_string[14]  #read + write
-		motor_accel = input_string[15]  #read + write
 
-		data.update({ u"motor_next_x": next_x, u"motor_next_y": next_y, u"motor_next_f": next_f, u"motor_current_x": current_x, u"motor_current_y": current_y, u"motor_current_f": current_f, u"motor_status_x": status_x, u"motor_status_y": status_y, u"motor_status_f": status_f, u"motor_empty": empty, u"motor_flash_status": flash_status, u"motor_flash_write_count": flash_write_count, u"motor_laser": gpio, u"motor_command": command, u"motor_speed": motor_speed, u"motor_accel": motor_accel})
-	except TypeError:
-		print 'failed to read motor data'
+class Controller(object):
+    # Device addresses on the I2C bus.
+    SFP_ADDRESS_A = 0x50
+    SFP_ADDRESS_B = 0x51
+    MOTOR_ADDRESS = 0x04
 
-				
-if ( not ( 'w1_therm' in open ( '/proc/modules' ) . read () and 'w1_gpio' in open ( '/proc/modules' ) . read () ) ):
-	call ( [ "modprobe", "wire" ] )
-	call ( [ "modprobe", "w1-gpio" ] )
-	call ( [ "modprobe", "w1-therm" ] )
+    # Input commands.
+    COMMANDS = [
+        'motor_next_x',
+        'motor_next_y',
+        'motor_next_f',
+        'motor_command',
+        'motor_laser',
+        'motor_speed',
+        'motor_accel',
+    ]
 
-def readSensors ():
-	global data
-	diag = readRegisters (0x51,0,256)
-	#1wire disabled for now, must auto-detect sensor path
-	#second_line = getSecondLine ()
-	#temperature_case	= format ( float ( second_line . split ( "=" ) [ 1 ] . rstrip () ) / 1000, '4.10f' )
-	temperature_case = 0
-	temperature_sfp = format ( conv ( diag, 96, 256 ), '4.10f' )
-	vcc 			= format ( conv ( diag, 98, 10000 ), '4.10f' )
-	tx_bias	 		= format ( conv ( diag, 100, 500 ), '5.10f' )
-	tx_power 		= format ( conv ( diag, 102, 10000 ), '2.10f' )
-	rx_power 		= format ( conv ( diag, 104, 10000 ), '.10f' )
-	data.update({ u"case_temperature_c": temperature_case, u"sfp_temperature_c": temperature_sfp, u"sfp_vcc_v": vcc, u"sfp_tx_bias_ma": tx_bias, u"sfp_tx_power_mw": tx_power, u"sfp_rx_power_mw": rx_power})
+    def __init__(self):
+        self.bus = smbus.SMBus(1)
+        self.state = {
+            'motor_next_x': 0,
+            'motor_next_y': 0,
+            'motor_next_f': 0,
+            'motor_current_x': 0,
+            'motor_current_y': 0,
+            'motor_current_f': 0,
+            'motor_status_x': 0,
+            'motor_status_y': 0,
+            'motor_status_f': 0,
+            'motor_empty': 0,
+            'motor_flash_status': 0,
+            'motor_flash_write_count': 0,
+            'motor_laser': 0,
+            'motor_command': 0,
+            'motor_speed': 0,
+            'motor_accel': 0,
+            'case_temperature_c': 0,
+            'sfp_temperature_c': 0,
+            'sfp_vcc_v': 0,
+            'sfp_tx_bias_ma': 0,
+            'sfp_tx_power_mw': 0,
+            'sfp_rx_power_mw': 0,
+        }
+        self.present_i2c_sfp = False
+        self.present_i2c_motor = False
 
-	
-	
-def writeToDb( ):
-	global data
-	data.update({ u"remote_connected": '1', })
+        # Load configuration.
+        with open(CONFIG_FILE, 'r') as config_file:
+            self.config = json.load(config_file)
 
-	conn = sqlite3 . connect (  config [ "database_path" ] )
-	cur = conn . cursor ()
+    def initialize(self):
+        # Check if all the required 1wire kernel modules are loaded and load them.
+        loaded_modules = [x.split()[0] for x in open('/proc/modules').read().split('\n') if x]
+        if 'w1_therm' not in loaded_modules or 'w1_gpio' not in loaded_modules:
+            subprocess.call(["modprobe", "wire"])
+            subprocess.call(["modprobe", "w1-gpio"])
+            subprocess.call(["modprobe", "w1-therm"])
 
-	cur . execute ( 'UPDATE local SET motor_next_x = ?', (data [ u"motor_next_x" ],) )
-	cur . execute ( 'UPDATE local SET motor_next_y = ?', (data [ u"motor_next_y" ],) )
-	cur . execute ( 'UPDATE local SET motor_next_f = ?', (data [ u"motor_next_f" ],) )
-	cur . execute ( 'UPDATE local SET motor_current_x = ?', (data [ u"motor_current_x" ],) )
-	cur . execute ( 'UPDATE local SET motor_current_y = ?', (data [ u"motor_current_y" ],) )
-	cur . execute ( 'UPDATE local SET motor_current_f = ?', (data [ u"motor_current_f" ],) )
-	cur . execute ( 'UPDATE local SET motor_status_x = ?', (data [ u"motor_status_x" ],) )
-	cur . execute ( 'UPDATE local SET motor_status_y = ?', (data [ u"motor_status_y" ],) )
-	cur . execute ( 'UPDATE local SET motor_status_f = ?', (data [ u"motor_status_f" ],) )
-	cur . execute ( 'UPDATE local SET motor_empty = ?', (data [ u"motor_empty" ],) )
-	cur . execute ( 'UPDATE local SET motor_flash_status = ?', (data [ u"motor_flash_status" ],) )
-	cur . execute ( 'UPDATE local SET motor_flash_write_count = ?', (data [ u"motor_flash_write_count" ],) )
-	cur . execute ( 'UPDATE local SET motor_command = ?', (data [ u"motor_command" ],) )
-	cur . execute ( 'UPDATE local SET motor_laser = ?', (data [ u"motor_laser" ],) )
-	cur . execute ( 'UPDATE local SET motor_speed = ?', (data [ u"motor_speed" ],) )
-	cur . execute ( 'UPDATE local SET motor_accel = ?', (data [ u"motor_accel" ],) )
-	cur . execute ( 'UPDATE local SET remote_connected = ?', (data [ u"remote_connected" ],) )
-	cur . execute ( 'UPDATE local SET sfp_rx_power_mw = ?', (data [ u"sfp_rx_power_mw" ],) )
-	cur . execute ( 'UPDATE local SET case_temperature_c = ?', (data [ u"case_temperature_c" ],) )
-	cur . execute ( 'UPDATE local SET sfp_temperature_c = ?', (data [ u"sfp_temperature_c" ],) )
-	cur . execute ( 'UPDATE local SET sfp_tx_bias_ma = ?', (data [ u"sfp_tx_bias_ma" ],) )
-	cur . execute ( 'UPDATE local SET sfp_tx_power_mw = ?', (data [ u"sfp_tx_power_mw" ],) )
-	cur . execute ( 'UPDATE local SET sfp_vcc_v = ?', (data [ u"sfp_vcc_v" ],) )
+        # Check if SFP present at 0x50, should also check for 0x51 to make sure SFP is compatible and further tests.
+        try:
+            self.bus.write_byte(Controller.SFP_ADDRESS_B, 0)
+            self.present_i2c_sfp = True
+        except IOError:
+            self.present_i2c_sfp = False
 
-	conn . commit ()
-	conn . close ()
+        # Check if motor driver present at 0x04.
+        try:
+            self.bus.write_byte(Controller.MOTOR_ADDRESS, 0)
+            self.present_i2c_motor = True
+        except IOError:
+            self.present_i2c_motor = False
 
-	#outFile = open ( '/var/tmp/koruza/output.json', 'w' )
-	#outFile . write ( json.dumps(data, indent = 2, sort_keys = True ) )
-        #outFile . write ( "\n" )
-        #outFile . close ()
+        print 'Motor driver present: %s' % self.present_i2c_motor
+        print 'SFP present: %s' % self.present_i2c_sfp
 
-#check if SFP present at 0x50, should also check for 0x51 to make sure SFP is compatible and furthre tests
-try:
-	bus.write_byte(0x51, 0)
-	present_i2c_sfp=1
-except IOError:
-	present_i2c_sfp=0
+        if self.present_i2c_sfp:
+            # Read SFP information.
+            sfp_info_byte = self.read_registers(Controller.SFP_ADDRESS_A, 0, 96)
+            sfp_info_byte = "".join([chr(x) for x in sfp_info_byte])
+            sfp_info = struct.unpack('=BBB8sBBBBBBBBB16sB3s16s4sBBBBHBB16s8sBBBB', sfp_info_byte)
+            print 'SFP serial: %s' % sfp_info[26]
+            print 'SFP model: %s' % sfp_info[16]
 
-#check if motor driver present at 0x40
-try:
-	bus.write_byte(0x04, 0)
-	present_i2c_motor=1
-except IOError:
-	present_i2c_motor=0
+    def load(self):
+        database = sqlite3.connect(self.config['database_path'])
+        database.row_factory = sqlite3.Row
 
-print 'SFP present: ' + str(present_i2c_sfp)
-print 'Motor driver present: ' + str(present_i2c_motor)
+        cursor = database.execute('SELECT * FROM local')
+        try:
+            data = cursor.fetchone()
+            for key in data.keys():
+                if not key.startswith('motor_'):
+                    continue
 
-#perform once
-sfp_info_byte = readRegisters ( 0x50,0,96)
-sfp_info_byte = "".join([chr(x) for x in sfp_info_byte])
-sfp_info=struct.unpack('=BBB8sBBBBBBBBB16sB3s16s4sBBBBHBB16s8sBBBB',sfp_info_byte)
-print 'SFP serial: ' + sfp_info[26]
-print 'SFP model: ' + sfp_info[16]
+                self.state[key] = int(data[key])
+        finally:
+            cursor.close()
+            database.close()
 
-#loop
-while True:
-	while True:
-		if present_i2c_motor==1:
-			startTime = datetime.now()
-			controlMotors()
-		if present_i2c_sfp==1:
-			readSensors()
-		writeToDb()
+    def save(self):
+        self.state['remote_connected'] = 1
+
+        database = sqlite3.connect(self.config['database_path'])
+        try:
+            for key, value in self.state.items():
+                # Do not overwrite command fields.
+                if key in Controller.COMMANDS:
+                    continue
+
+                database.execute(
+                    'UPDATE local SET %(key)s = :value' % {
+                        'key': key,
+                    },
+                    {'value': value},
+                )
+
+            database.commit()
+        finally:
+            database.close()
+
+    def write_registers(self, address, offset, data):
+        try:
+            # Convert string to a list of bytes.
+            converted = []
+            for byte in data:
+                converted.append(ord(byte))
+
+            self.bus.write_block_data(address, offset, converted)
+        except IOError:
+            print 'WARNING: i2c motor driver write unavailable!'
+
+    def read_registers(self, address, offset, length):
+        try:
+            self.bus.write_byte(address, offset)
+            list = []
+            for i in range(0, length):
+                value = self.bus.read_byte(address)
+                list.append(value)
+
+            return list
+        except IOError:
+            print 'WARNING: i2c motor driver read unavailable!'
+
+        return []
+
+    def read_sensors(self):
+        diag = self.read_registers(Controller.SFP_ADDRESS_B, 0, 256)
+        # TODO: 1wire disabled for now, must auto-detect sensor path.
+        #second_line = getSecondLine ()
+        #temperature_case    = format ( float ( second_line . split ( "=" ) [ 1 ] . rstrip () ) / 1000, '4.10f' )
+
+        def conv(list, i, div):
+            a = float((list[i] << 8) + list[i + 1])
+            return (a / div)
+
+        self.state.update({
+            'case_temperature_c': 0,
+            'sfp_temperature_c': format(conv(diag, 96, 256), '4.10f'),
+            'sfp_vcc_v': format(conv(diag, 98, 10000), '4.10f'),
+            'sfp_tx_bias_ma': format(conv(diag, 100, 500), '5.10f'),
+            'sfp_tx_power_mw': format(conv(diag, 102, 10000), '2.10f'),
+            'sfp_rx_power_mw': format(conv(diag, 104, 10000), '.10f'),
+        })
+
+    def control_motors(self):
+        # Sending is a separate step due to 32 byte buffer limit and due to only some bytes being writable
+        # where the motors should move.
+        self.write_registers(
+            Controller.MOTOR_ADDRESS,
+            0,
+            struct.pack(
+                '=lll',
+                self.state['motor_next_x'],
+                self.state['motor_next_y'],
+                self.state['motor_next_f']
+            )
+        )
+        # Commands and configs.
+        self.write_registers(
+            Controller.MOTOR_ADDRESS,
+            30,
+            struct.pack(
+                '=BBHH',
+                self.state['motor_command'],
+                self.state['motor_laser'],
+                self.state['motor_speed'],
+                self.state['motor_accel']
+            )
+        )
+
+        try:
+            # Now read values back from the motor short delay advised.
+            byte_data = self.read_registers(Controller.MOTOR_ADDRESS, 0, 36)
+            byte_data = "".join([chr(x) for x in byte_data])
+            data = struct.unpack('=llllllBBBBBBBBHH', byte_data)
+
+            self.state.update({
+                'motor_current_x': data[3],
+                'motor_current_y': data[4],
+                'motor_current_f': data[5],
+                'motor_status_x': data[6],
+                'motor_status_y': data[7],
+                'motor_status_f': data[8],
+                'motor_empty': data[9],
+                'motor_flash_status': data[10],
+                'motor_flash_write_count': data[11],
+            })
+        except TypeError:
+            print 'WARNING: Failed to read motor data!'
+
+    def start(self):
+        while True:
+            self.load()
+
+            # Control the motors if driver is available.
+            if self.present_i2c_motor:
+                self.control_motors()
+
+            # Read sensor data if driver is available.
+            if self.present_i2c_sfp:
+                self.read_sensors()
+
+            # Persist data to the database.
+            self.save()
+
+# Initialize and start the controller.
+controller = Controller()
+controller.initialize()
+controller.start()
