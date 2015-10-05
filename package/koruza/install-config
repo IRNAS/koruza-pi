@@ -1,0 +1,31 @@
+#!/usr/bin/python
+
+
+def append_config(cfg, line, existing):
+    if line not in existing:
+        cfg.write('%s\n' % line)
+
+# Setup boot configuration.
+print "Updating boot configuration."
+with open('/boot/config.txt', 'r+') as boot_cfg:
+    existing_configuration = [
+        line
+        for line in boot_cfg.read().split('\n')
+        if line.strip() and not line.strip().startswith('#')
+    ]
+
+    append_config(boot_cfg, 'dtparam=i2c_arm=on', existing_configuration)
+    append_config(boot_cfg, 'dtparam=spi=on', existing_configuration)
+    append_config(boot_cfg, 'dtoverlay=w1-gpio', existing_configuration)
+
+# Setup modules.
+print "Updating modules."
+with open('/etc/modules', 'r+') as modules_cfg:
+    existing_configuration = [
+        line
+        for line in modules_cfg.read().split('\n')
+        if line.strip() and not line.strip().startswith('#')
+    ]
+
+    append_config(modules_cfg, 'i2c-dev', existing_configuration)
+    append_config(modules_cfg, 'i2c-bcm2708', existing_configuration)

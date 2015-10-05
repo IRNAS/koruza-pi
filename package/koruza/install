@@ -6,4 +6,5 @@ if [ ${EUID} -ne 0 ]; then
 fi
 
 /koruza/install-packages
+/koruza/install-config
 
