@@ -3,4 +3,3 @@ pyopenssl==0.15.1
 ndg-httpsclient==0.4.0
 pyasn1==0.1.8
 urwid
-i2c-tools
