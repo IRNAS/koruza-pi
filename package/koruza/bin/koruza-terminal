@@ -327,8 +327,9 @@ class TerminalView(urwid.WidgetWrap):
     def on_key(self, key):
         if key == 'esc':
             self.exit_program(False)
+
         if self.aiming:
-            self.update_message('Pressed Key:' + key)
+            self.update_message('Pressed Key: %s' % key)
             self.controller.aim(key)
 
     def on_animate_button(self, button):
