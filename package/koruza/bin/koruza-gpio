@@ -69,7 +69,7 @@ try:
 		else:
 			GPIO . output ( led3, GPIO.LOW )
 		#evaluate power
-		if float(rx_power)>10:
+		if float(rx_power)>0.0010:
 			GPIO . output ( led2, GPIO.HIGH )
 		else:
 			GPIO . output ( led2, GPIO.LOW )
