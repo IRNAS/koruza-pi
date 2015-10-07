@@ -1,13 +1,8 @@
 #!/usr/bin/python
 import urwid
-import termios
-import sys
-import tty
-import signal
 import time
 import json
 import sqlite3
-import threading
 import math
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
@@ -329,7 +324,7 @@ class TerminalView(urwid.WidgetWrap):
             self.aiming = True
             self.update_message('Started Aiming !')
 
-    def on_key(self,key):
+    def on_key(self, key):
         if key == 'esc':
             self.exit_program(False)
         if self.aiming:
@@ -396,7 +391,7 @@ class TerminalView(urwid.WidgetWrap):
     def bar_graph(self, smooth=False):
         satt = None
         if smooth:
-            satt = {(1,0): 'bg 1 smooth', (2, 0): 'bg 2 smooth'}
+            satt = {(1, 0): 'bg 1 smooth', (2, 0): 'bg 2 smooth'}
         w = urwid.BarGraph(['bg background', 'bg 1', 'bg 2'], satt=satt)
         return w
 
@@ -446,10 +441,11 @@ class TerminalView(urwid.WidgetWrap):
         if urwid.get_encoding_mode() == "utf8":
             unicode_checkbox = urwid.CheckBox(
                 "Enable Unicode Graphics",
-                on_state_change=self.on_unicode_checkbox)
+                on_state_change=self.on_unicode_checkbox
+            )
         else:
-            unicode_checkbox = urwid.Text(
-                "UTF-8 encoding not detected")
+            unicode_checkbox = urwid.Text("UTF-8 encoding not detected")
+
         self.status_message = self.text_message('Press Enter or Start aiming to aim')
         self.animate_progress_wrap = urwid.WidgetWrap(
             self.animate_progress)
@@ -515,24 +511,23 @@ class TerminalView(urwid.WidgetWrap):
         ]
 
         l = [
-            urwid.Text("Koruza Terminal",align="center"),
+            urwid.Text("Koruza Terminal", align="center"),
             urwid.LineBox(self.status_message),
             #urwid.Divider(),
             urwid.Text(
-                ["Q   W   E   <- LOCAL           REMOTE ->    T   Y   U\n"
-                "  \ | /        K  ::laser on/off::  L         \ | /  \n"
-                "A -[o]- D      V-F ::zoom focus:: O-P       G -[o]- J\n"
-                "  / | \        7-8 :motors speed: 9-0         / | \  \n"
-                "  Z   X   C      S  ::motors home::   H       B   N   M  "],
+                [
+                    "Q   W   E   <- LOCAL           REMOTE ->    T   Y   U\n"
+                    "  \ | /        K  ::laser on/off::  L         \ | /  \n"
+                    "A -[o]- D      V-F ::zoom focus:: O-P       G -[o]- J\n"
+                    "  / | \        7-8 :motors speed: 9-0         / | \  \n"
+                    "  Z   X   C      S  ::motors home::   H       B   N   M  "
+                ],
                 align='center'
             ),
             #urwid.Divider(),
             self.aim_button,
             #urwid.Divider(),
-            ] + local_status #+ [
-            #urwid.Divider(),
-            #self.button("Quit", self.exit_program ),
-            #]
+        ] + local_status
         w = urwid.ListBox(urwid.SimpleListWalker(l))
         return w
 
@@ -661,7 +656,7 @@ class TerminalController:
                 local.motor_speed = 50
                 self.view.update_message('Setting local motor speed: %s' % local.motor_speed, NOTATION_INFO)
         elif key in ('8'):
-            if local_motor_speed != 200:
+            if local.motor_speed != 200:
                 local.motor_speed = 200
                 self.view.update_message('Setting local motor speed: %s' % local.motor_speed, NOTATION_INFO)
         elif key in ('9'):
