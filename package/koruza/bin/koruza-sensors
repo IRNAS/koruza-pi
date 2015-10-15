@@ -2,10 +2,10 @@
 
 import smbus
 import json
-import time
 import struct
 import sqlite3
 import subprocess
+import time
 
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
@@ -37,6 +37,9 @@ class Controller(object):
             'motor_current_x': 0,
             'motor_current_y': 0,
             'motor_current_f': 0,
+            'motor_max_x': 10000,
+            'motor_max_y': 10000,
+            'motor_max_f': 10000,
             'motor_status_x': 0,
             'motor_status_y': 0,
             'motor_status_f': 0,
@@ -53,9 +56,11 @@ class Controller(object):
             'sfp_tx_bias_ma': 0,
             'sfp_tx_power_mw': 0,
             'sfp_rx_power_mw': 0,
+            'remote_connected': 0,
         }
         self.present_i2c_sfp = False
         self.present_i2c_motor = False
+        self.last_snapshot = 0
 
         # Load configuration.
         with open(CONFIG_FILE, 'r') as config_file:
@@ -94,10 +99,39 @@ class Controller(object):
             print 'SFP serial: %s' % sfp_info[26]
             print 'SFP model: %s' % sfp_info[16]
 
-    def load(self):
+        # Initialize the database.
+        self.create_tables()
+
+    def _database(self):
         database = sqlite3.connect(self.config['database_path'])
         database.row_factory = sqlite3.Row
 
+        return database
+
+    def create_tables(self):
+        columns = self.state.keys()
+        database = self._database()
+
+        # Create local and remote tables.
+        for table in ('local', 'remote'):
+            database.execute(
+                'CREATE TABLE IF NOT EXISTS %(table)s (%(columns)s)' % {
+                    'table': table,
+                    'columns': ', '.join(columns),
+                }
+            )
+
+        # Create historical data table.
+        columns = ['timestamp'] + columns
+        database.execute(
+            'CREATE TABLE IF NOT EXISTS local_history (%(columns)s)' % {
+                'table': table,
+                'columns': ', '.join(columns),
+            }
+        )
+
+    def load(self):
+        database = self._database()
         cursor = database.execute('SELECT * FROM local')
         try:
             data = cursor.fetchone()
@@ -115,6 +149,8 @@ class Controller(object):
 
         database = sqlite3.connect(self.config['database_path'])
         try:
+            now = time.time()
+            snapshot = [('timestamp', now)]
             for key, value in self.state.items():
                 # Do not overwrite command fields.
                 if key in Controller.COMMANDS:
@@ -125,6 +161,25 @@ class Controller(object):
                         'key': key,
                     },
                     {'value': value},
+                )
+                snapshot.append((key, value))
+
+            if now - self.last_snapshot >= self.config['snapshot_interval']:
+                self.last_snapshot = now
+
+                # Populate historic data with a new snapshot.
+                database.execute(
+                    'INSERT INTO local_history (%(columns)s) VALUES (%(placeholders)s)' % {
+                        'columns': ', '.join([x[0] for x in snapshot]),
+                        'placeholders': ', '.join(['?'] * len(snapshot)),
+                    },
+                    [x[1] for x in snapshot],
+                )
+
+                # Cleanup any old data.
+                database.execute(
+                    'DELETE FROM local_history WHERE timestamp < :window',
+                    {'window': now - self.config['snapshot_window']},
                 )
 
             database.commit()

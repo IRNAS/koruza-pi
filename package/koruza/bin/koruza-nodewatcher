@@ -20,33 +20,31 @@ NODEWATCHER_PUSH_URL = 'https://push.nodes.wlan-si.net/push/http/%(uuid)s'
 NODEWATCHER_CERTIFICATE = '/koruza/config/nodewatcher-authentication.crt'
 NODEWATCHER_PRIVATE_KEY = '/koruza/config/nodewatcher-authentication.key'
 # Sensor data that should be reported.
+# Possible values for 'aggregation' are: AVG, MIN, MAX, SUM
 REPORT_SENSOR_DATA = {
-    'motor_accel': {'name': "Motor Acceleration", 'unit': ""},
-    'motor_command': {'name': "Motor Command", 'unit': ""},
-    'motor_current_f': {'name': "Motor Current F", 'unit': ""},
-    'motor_current_x': {'name': "Motor Current X", 'unit': ""},
-    'motor_current_y': {'name': "Motor Current Y", 'unit': ""},
-    'motor_empty': {'name': "Motor Empty", 'unit': ""},
-    'motor_flash_status': {'name': "Motor Flash Status", 'unit': ""},
-    'motor_flash_write_count': {'name': "Motor Flash Write Count", 'unit': ""},
-    'motor_laser': {'name': "Motor Laser", 'unit': ""},
-    'motor_max_f': {'name': "Motor Maximum F", 'unit': ""},
-    'motor_max_x': {'name': "Motor Maximum X", 'unit': ""},
-    'motor_max_y': {'name': "Motor Maximum Y", 'unit': ""},
-    'motor_next_f': {'name': "Motor Next F", 'unit': ""},
-    'motor_next_x': {'name': "Motor Next X", 'unit': ""},
-    'motor_next_y': {'name': "Motor Next Y", 'unit': ""},
-    'motor_speed': {'name': "Motor Speed", 'unit': ""},
-    'motor_status_f': {'name': "Motor Status F", 'unit': ""},
-    'motor_status_x': {'name': "Motor Status X", 'unit': ""},
-    'motor_status_y': {'name': "Motor Status Y", 'unit': ""},
-    'remote_connected': {'name': "Remote Connected", 'unit': ""},
-    'sfp_rx_power_mw': {'name': "SFP RX Power", 'unit': "mW"},
-    'case_temperature_c': {'name': "Case Temperature", 'unit': "C"},
-    'sfp_temperature_c': {'name': "SFP Temperature", 'unit': "C"},
-    'sfp_tx_bias_ma': {'name': "SFP TX Bias", 'unit': "mA"},
-    'sfp_tx_power_mw': {'name': "SFP TX Power", 'unit': "mW"},
-    'sfp_vcc_v': {'name': "SFP VCC", 'unit': "V"},
+    'motor_accel': {'name': "Motor Acceleration", 'unit': "", 'aggregation': 'AVG'},
+    'motor_command': {'name': "Motor Command", 'unit': "", 'aggregation': 'AVG'},
+    'motor_current_f': {'name': "Motor Current F", 'unit': "", 'aggregation': 'AVG'},
+    'motor_current_x': {'name': "Motor Current X", 'unit': "", 'aggregation': 'AVG'},
+    'motor_current_y': {'name': "Motor Current Y", 'unit': "", 'aggregation': 'AVG'},
+    'motor_empty': {'name': "Motor Empty", 'unit': "", 'aggregation': 'AVG'},
+    'motor_flash_status': {'name': "Motor Flash Status", 'unit': "", 'aggregation': 'AVG'},
+    'motor_flash_write_count': {'name': "Motor Flash Write Count", 'unit': "", 'aggregation': 'AVG'},
+    'motor_laser': {'name': "Motor Laser", 'unit': "", 'aggregation': 'AVG'},
+    'motor_next_f': {'name': "Motor Next F", 'unit': "", 'aggregation': 'AVG'},
+    'motor_next_x': {'name': "Motor Next X", 'unit': "", 'aggregation': 'AVG'},
+    'motor_next_y': {'name': "Motor Next Y", 'unit': "", 'aggregation': 'AVG'},
+    'motor_speed': {'name': "Motor Speed", 'unit': "", 'aggregation': 'AVG'},
+    'motor_status_f': {'name': "Motor Status F", 'unit': "", 'aggregation': 'AVG'},
+    'motor_status_x': {'name': "Motor Status X", 'unit': "", 'aggregation': 'AVG'},
+    'motor_status_y': {'name': "Motor Status Y", 'unit': "", 'aggregation': 'AVG'},
+    'remote_connected': {'name': "Remote Connected", 'unit': "", 'aggregation': 'AVG'},
+    'sfp_rx_power_mw': {'name': "SFP RX Power", 'unit': "mW", 'aggregation': 'AVG'},
+    'case_temperature_c': {'name': "Case Temperature", 'unit': "C", 'aggregation': 'AVG'},
+    'sfp_temperature_c': {'name': "SFP Temperature", 'unit': "C", 'aggregation': 'AVG'},
+    'sfp_tx_bias_ma': {'name': "SFP TX Bias", 'unit': "mA", 'aggregation': 'AVG'},
+    'sfp_tx_power_mw': {'name': "SFP TX Power", 'unit': "mW", 'aggregation': 'AVG'},
+    'sfp_vcc_v': {'name': "SFP VCC", 'unit': "V", 'aggregation': 'AVG'},
 }
 
 # Generate node UUID from this node's MAC address.
@@ -98,7 +96,24 @@ while True:
         database.row_factory = sqlite3.Row
 
         try:
-            cursor = database.execute('SELECT * FROM local')
+            selectors = []
+            for key, config in REPORT_SENSOR_DATA.items():
+                if config['aggregation'].upper() not in ('AVG', 'MIN', 'MAX', 'SUM'):
+                    print "WARNING: Ignoring datum '%s' due to incorrect aggregation '%s'!" % (
+                        key,
+                        config['aggregation'],
+                    )
+                    continue
+
+                selectors.append(
+                    '%(aggregation)s(%(key)s) AS %(key)s' % {
+                        'key': key,
+                        'aggregation': config['aggregation'],
+                    }
+                )
+            selectors = ', '.join(selectors)
+
+            cursor = database.execute('SELECT %s FROM local_history' % selectors)
             try:
                 data = cursor.fetchone()
 
@@ -115,11 +130,16 @@ while True:
                     if key not in REPORT_SENSOR_DATA:
                         continue
 
+                    try:
+                        value = float(data[key])
+                    except (TypeError, ValueError):
+                        value = None
+
                     descriptor = REPORT_SENSOR_DATA[key]
                     feed['sensors.generic'][key] = {
                         'name': descriptor['name'],
                         'unit': descriptor['unit'],
-                        'value': float(data[key]),
+                        'value': value,
                     }
 
                 # Post update to nodewatcher.
