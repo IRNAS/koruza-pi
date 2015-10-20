@@ -75,6 +75,9 @@ class UnitState(object):
                     self._state[key] = descriptor['type'](descriptor.get('default', descriptor['type']()))
         finally:
             cursor.close()
+        self._state['motor_max_x']=config['motor_max_x']
+        self._state['motor_max_y']=config['motor_max_y']
+        self._state['motor_max_f']=config['motor_max_f']
 
     def update(self, key, value):
         if key not in UnitState.STATE:
@@ -613,38 +616,55 @@ class TerminalController:
 
         if key in ('w', 'up'):
             self.view.update_message(*local.move_motors(y=self.steps_count))
-        elif key in ('x', 'down'):
+        elif key in ('s', 'down'):
             self.view.update_message(*local.move_motors(y=-self.steps_count))
         elif key in ('a', 'left'):
             self.view.update_message(*local.move_motors(x=-self.steps_count))
         elif key in ('d', 'right'):
             self.view.update_message(*local.move_motors(x=self.steps_count))
-        elif key in ('q'):
-            self.view.update_message(*local.move_motors(y=self.steps_count, x=-self.steps_count))
-        elif key in ('e'):
-            self.view.update_message(*local.move_motors(y=self.steps_count, x=self.steps_count))
-        elif key in ('z'):
-            self.view.update_message(*local.move_motors(y=-self.steps_count, x=-self.steps_count))
-        elif key in ('c'):
-            self.view.update_message(*local.move_motors(y=-self.steps_count, x=self.steps_count))
         elif key in ('v'):
             self.view.update_message(*local.move_motors(f=-self.steps_count))
         elif key in ('f'):
             self.view.update_message(*local.move_motors(f=self.steps_count))
-        elif key in ('k'):
+        elif key in ('l'):
             if local.motor_laser == 0:
                 local.motor_laser = 1
                 self.view.update_message('Turning on local LASER!', NOTATION_CRITICAL)
             else:
                 local.motor_laser = 0
                 self.view.update_message('Turning off local LASER!', NOTATION_CRITICAL)
-        elif key in ('s'):
+        elif key in ('t'):
+            local.motor_command = 1
+            self.view.update_message('Movement stopping!', NOTATION_CRITICAL)
+            time.sleep(1)
+            local.motor_command = 0
+        elif key in ('g'):
             local.motor_command = 2
             self.view.update_message('Local koruza going home!', NOTATION_CRITICAL)
+            local.move_motors(x=0)
+            time.sleep(1)
+            local.motor_command = 0
+        elif key in ('h'):
+            local.motor_command = 3
+            self.view.update_message('Local koruza going home!', NOTATION_CRITICAL)
+            local.move_motors(y=0)
+            time.sleep(1)
+            local.motor_command = 0
+        elif key in ('j'):
+            local.motor_command = 4
+            self.view.update_message('Local koruza going home!', NOTATION_CRITICAL)
+            local.move_motors(f=0)
+            time.sleep(1)
+            local.motor_command = 0
+        elif key in ('0'):
+            local.motor_command = 5
+            self.view.update_message('Resetting x and y to 0!', NOTATION_CRITICAL)
+            local.move_motors(x=-local._state['motor_current_x'])
+            local.move_motors(y=-local._state['motor_current_y'])
             time.sleep(1)
             local.motor_command = 0
         elif key in ('1'):
-            self.steps_count = 1
+            self.steps_count = 3
             self.view.update_message('Setting steps count: %s' % self.steps_count, NOTATION_INFO)
         elif key in ('2'):
             self.steps_count = 50
@@ -657,49 +677,9 @@ class TerminalController:
                 local.motor_speed = 50
                 self.view.update_message('Setting local motor speed: %s' % local.motor_speed, NOTATION_INFO)
         elif key in ('8'):
-            if local.motor_speed != 200:
+            if local_motor_speed != 200:
                 local.motor_speed = 200
                 self.view.update_message('Setting local motor speed: %s' % local.motor_speed, NOTATION_INFO)
-        elif key in ('9'):
-            if remote.motor_speed != 50:
-                remote.motor_speed = 50
-                self.view.update_message('Setting remote motor speed: %s' % remote.motor_speed, NOTATION_INFO)
-        elif key in ('0'):
-            if remote.motor_speed != 200:
-                remote.motor_speed = 200
-                self.view.update_message('Setting remote motor speed: %s' % remote.motor_speed, NOTATION_INFO)
-        elif key in ('y'):
-            self.view.update_message(*remote.move_motors(y=1))
-        elif key in ('n'):
-            self.view.update_message(*remote.move_motors(y=-1))
-        elif key in ('g'):
-            self.view.update_message(*remote.move_motors(x=-1))
-        elif key in ('j'):
-            self.view.update_message(*remote.move_motors(x=1))
-        elif key in ('t'):
-            self.view.update_message(*remote.move_motors(y=1, x=-1))
-        elif key in ('u'):
-            self.view.update_message(*remote.move_motors(y=1, x=1))
-        elif key in ('b'):
-            self.view.update_message(*remote.move_motors(y=-1, x=-1))
-        elif key in ('m'):
-            self.view.update_message(*remote.move_motors(y=-1, x=1))
-        elif key in ('o'):
-            self.view.update_message(*remote.move_motors(f=-1))
-        elif key in ('p'):
-            self.view.update_message(*remote.move_motors(f=1))
-        elif key in ('l'):
-            if remote.motor_laser == 0:
-                remote.motor_laser = 1
-                self.view.update_message('Turning on remote LASER!', NOTATION_CRITICAL)
-            else:
-                remote.motor_laser = 0
-                self.view.update_message('Turning off remote LASER!', NOTATION_CRITICAL)
-        elif key in ('h'):
-            remote.motor_command = 2
-            self.view.update_message('Remote koruza going home!', NOTATION_CRITICAL)
-            time.sleep(1)
-            remote.motor_command = 0
         elif key in ('enter'):
             self.view.button.set_label("Start Aiming")
             self.view.aiming = False
