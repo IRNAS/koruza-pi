@@ -520,11 +520,11 @@ class TerminalView(urwid.WidgetWrap):
             #urwid.Divider(),
             urwid.Text(
                 [
-                    "Q   W   E   <- LOCAL           REMOTE ->    T   Y   U\n"
-                    "  \ | /        K  ::laser on/off::  L         \ | /  \n"
-                    "A -[o]- D      V-F ::zoom focus:: O-P       G -[o]- J\n"
-                    "  / | \        7-8 :motors speed: 9-0         / | \  \n"
-                    "  Z   X   C      S  ::motors home::   H       B   N   M  "
+                    "    W        T :: stop all  \n"
+                    "    |        K  ::laser on/off\n"
+                    "A -[o]- D    V-F ::zoom focus\n"
+                    "    |        1-3 :motor step\n"
+                    "    S        G H J ::motors home"
                 ],
                 align='center'
             ),
