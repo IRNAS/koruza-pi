@@ -2,16 +2,19 @@
 import json
 import os
 import requests
-import sqlite3
 import sys
 import time
 import uuid
 import OpenSSL
+import nnpy
+import select
+
+
+def average(points):
+    return float(sum(points)) / len(points)
 
 # Namespace for KORUZA device UUIDs.
 KORUZA_UUID_NAMESPACE = uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e')
-# Database location.
-KORUZA_DATABASE = '/var/tmp/koruza/database.db'
 # Nodewatcher push interval (in seconds).
 NODEWATCHER_PUSH_INTERVAL = 300
 # Nodewatcher push URL.
@@ -20,32 +23,44 @@ NODEWATCHER_PUSH_URL = 'https://push.nodes.wlan-si.net/push/http/%(uuid)s'
 NODEWATCHER_CERTIFICATE = '/koruza/config/nodewatcher-authentication.crt'
 NODEWATCHER_PRIVATE_KEY = '/koruza/config/nodewatcher-authentication.key'
 # Sensor data that should be reported.
-# Possible values for 'aggregation' are: AVG, MIN, MAX, SUM
 REPORT_SENSOR_DATA = {
-    'motor_accel': {'name': "Motor Acceleration", 'unit': "", 'aggregation': 'AVG'},
-    'motor_command': {'name': "Motor Command", 'unit': "", 'aggregation': 'AVG'},
-    'motor_current_f': {'name': "Motor Current F", 'unit': "", 'aggregation': 'AVG'},
-    'motor_current_x': {'name': "Motor Current X", 'unit': "", 'aggregation': 'AVG'},
-    'motor_current_y': {'name': "Motor Current Y", 'unit': "", 'aggregation': 'AVG'},
-    'motor_empty': {'name': "Motor Empty", 'unit': "", 'aggregation': 'AVG'},
-    'motor_flash_status': {'name': "Motor Flash Status", 'unit': "", 'aggregation': 'AVG'},
-    'motor_flash_write_count': {'name': "Motor Flash Write Count", 'unit': "", 'aggregation': 'AVG'},
-    'motor_laser': {'name': "Motor Laser", 'unit': "", 'aggregation': 'AVG'},
-    'motor_next_f': {'name': "Motor Next F", 'unit': "", 'aggregation': 'AVG'},
-    'motor_next_x': {'name': "Motor Next X", 'unit': "", 'aggregation': 'AVG'},
-    'motor_next_y': {'name': "Motor Next Y", 'unit': "", 'aggregation': 'AVG'},
-    'motor_speed': {'name': "Motor Speed", 'unit': "", 'aggregation': 'AVG'},
-    'motor_status_f': {'name': "Motor Status F", 'unit': "", 'aggregation': 'AVG'},
-    'motor_status_x': {'name': "Motor Status X", 'unit': "", 'aggregation': 'AVG'},
-    'motor_status_y': {'name': "Motor Status Y", 'unit': "", 'aggregation': 'AVG'},
-    'remote_connected': {'name': "Remote Connected", 'unit': "", 'aggregation': 'AVG'},
-    'sfp_rx_power_mw': {'name': "SFP RX Power", 'unit': "mW", 'aggregation': 'AVG'},
-    'case_temperature_c': {'name': "Case Temperature", 'unit': "C", 'aggregation': 'AVG'},
-    'sfp_temperature_c': {'name': "SFP Temperature", 'unit': "C", 'aggregation': 'AVG'},
-    'sfp_tx_bias_ma': {'name': "SFP TX Bias", 'unit': "mA", 'aggregation': 'AVG'},
-    'sfp_tx_power_mw': {'name': "SFP TX Power", 'unit': "mW", 'aggregation': 'AVG'},
-    'sfp_vcc_v': {'name': "SFP VCC", 'unit': "V", 'aggregation': 'AVG'},
+    'motors': {
+        'accel': {'name': "Motor Acceleration", 'unit': "", 'aggregation': average},
+        'command': {'name': "Motor Command", 'unit': "", 'aggregation': average},
+        'current_f': {'name': "Motor Current F", 'unit': "", 'aggregation': average},
+        'current_x': {'name': "Motor Current X", 'unit': "", 'aggregation': average},
+        'current_y': {'name': "Motor Current Y", 'unit': "", 'aggregation': average},
+        'empty': {'name': "Motor Empty", 'unit': "", 'aggregation': average},
+        'flash_status': {'name': "Motor Flash Status", 'unit': "", 'aggregation': average},
+        'flash_write_count': {'name': "Motor Flash Write Count", 'unit': "", 'aggregation': average},
+        'laser': {'name': "Motor Laser", 'unit': "", 'aggregation': average},
+        'next_f': {'name': "Motor Next F", 'unit': "", 'aggregation': average},
+        'next_x': {'name': "Motor Next X", 'unit': "", 'aggregation': average},
+        'next_y': {'name': "Motor Next Y", 'unit': "", 'aggregation': average},
+        'speed': {'name': "Motor Speed", 'unit': "", 'aggregation': average},
+        'status_f': {'name': "Motor Status F", 'unit': "", 'aggregation': average},
+        'status_x': {'name': "Motor Status X", 'unit': "", 'aggregation': average},
+        'status_y': {'name': "Motor Status Y", 'unit': "", 'aggregation': average},
+    },
+    'sfp': {
+        'rx_power_mw': {'name': "SFP (%(serial)s) RX Power", 'unit': "mW", 'aggregation': average},
+        'temperature_c': {'name': "SFP (%(serial)s) Temperature", 'unit': "C", 'aggregation': average},
+        'tx_bias_ma': {'name': "SFP (%(serial)s) TX Bias", 'unit': "mA", 'aggregation': average},
+        'tx_power_mw': {'name': "SFP (%(serial)s) TX Power", 'unit': "mW", 'aggregation': average},
+        'vcc_v': {'name': "SFP (%(serial)s) VCC", 'unit': "V", 'aggregation': average},
+    }
 }
+# Snapshot interval (in seconds) and number of snapshots to keep for aggregation.
+SNAPSHOT_INTERVAL = 1
+SNAPSHOT_COUNT = int(NODEWATCHER_PUSH_INTERVAL / SNAPSHOT_INTERVAL)
+
+# Establish IPC connection.
+ipc = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
+ipc.connect('ipc:///tmp/koruza-publish.ipc')
+ipc.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, '')
+
+poll = select.poll()
+poll.register(ipc.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD), select.POLLIN)
 
 # Generate node UUID from this node's MAC address.
 node_uuid = uuid.uuid5(KORUZA_UUID_NAMESPACE, hex(uuid.getnode()).upper()[2:-1])
@@ -89,79 +104,91 @@ if not os.path.exists(NODEWATCHER_CERTIFICATE) or not os.path.exists(NODEWATCHER
 else:
     print "INIT: Nodewatcher authentication certificate ready."
 
+current_state = {}
+last_state_update = {}
+last_push = 0
+
 while True:
-    # Query the sqlite database for any updates.
-    try:
-        database = sqlite3.connect(KORUZA_DATABASE)
-        database.row_factory = sqlite3.Row
+    now = time.time()
 
-        try:
-            selectors = []
-            for key, config in REPORT_SENSOR_DATA.items():
-                if config['aggregation'].upper() not in ('AVG', 'MIN', 'MAX', 'SUM'):
-                    print "WARNING: Ignoring datum '%s' due to incorrect aggregation '%s'!" % (
-                        key,
-                        config['aggregation'],
-                    )
-                    continue
+    # Check for incoming updates.
+    fds = poll.poll(10)
+    if fds:
+        topic, payload = ipc.recv().split('\x00')
+        data = json.loads(payload)
 
-                selectors.append(
-                    '%(aggregation)s(%(key)s) AS %(key)s' % {
-                        'key': key,
-                        'aggregation': config['aggregation'],
-                    }
-                )
-            selectors = ', '.join(selectors)
+        last_update = last_state_update.get(data['type'], 0)
+        if now - last_update > SNAPSHOT_INTERVAL and data['type'] in REPORT_SENSOR_DATA:
+            # Update current state.
+            last_state_update[data['type']] = now
+            state = current_state.setdefault(data['type'], {})
 
-            cursor = database.execute('SELECT %s FROM local_history' % selectors)
-            try:
-                data = cursor.fetchone()
-
-                # Generate nodewatcher JSON.
-                feed = {
-                    'sensors.generic': {
-                        '_meta': {
-                            'version': 1,
-                        }
-                    }
-                }
-
-                for key in data.keys():
-                    if key not in REPORT_SENSOR_DATA:
+            if data['type'] == 'motors':
+                for key in REPORT_SENSOR_DATA[data['type']]:
+                    if key not in data['motor']:
                         continue
 
-                    try:
-                        value = float(data[key])
-                    except (TypeError, ValueError):
-                        value = None
+                    points = state.setdefault(key, [])
+                    points.append(data['motor'][key])
+                    if len(points) > SNAPSHOT_COUNT:
+                        points.pop(0)
+            elif data['type'] == 'sfp':
+                for serial, sfp in data['sfp'].items():
+                    sfp_state = state.setdefault(serial, {})
 
-                    descriptor = REPORT_SENSOR_DATA[key]
-                    feed['sensors.generic'][key] = {
-                        'name': descriptor['name'],
-                        'unit': descriptor['unit'],
-                        'value': value,
-                    }
+                    for key in REPORT_SENSOR_DATA[data['type']]:
+                        if key not in sfp:
+                            continue
 
-                # Post update to nodewatcher.
-                try:
-                    request = requests.post(
-                        NODEWATCHER_PUSH_URL % {'uuid': str(node_uuid)},
-                        data=json.dumps(feed),
-                        cert=(NODEWATCHER_CERTIFICATE, NODEWATCHER_PRIVATE_KEY),
-                    )
+                        points = sfp_state.setdefault(key, [])
+                        points.append(sfp[key])
+                        if len(points) > SNAPSHOT_COUNT:
+                            points.pop(0)
 
-                    # Check for successful post.
-                    if request.json()['status'] != 'ok':
-                        print "WARNING: Received failure while pushing to nodewatcher."
-                    else:
-                        print "OK: Data pushed to nodewatcher."
-                except (requests.HTTPError, requests.ConnectionError, ValueError):
-                    print "WARNING: Failed to push data to nodewatcher."
-            finally:
-                cursor.close()
-        finally:
-            database.close()
-    except (sqlite3.OperationalError, AttributeError):
-        print "WARNING: Failed to access the status database."
+    # Push data to nodewatcher.
+    if now - last_push > NODEWATCHER_PUSH_INTERVAL:
+        last_push = now
 
-    time.sleep(NODEWATCHER_PUSH_INTERVAL)
+        # Generate nodewatcher JSON.
+        feed = {
+            'sensors.generic': {
+                '_meta': {
+                    'version': 1,
+                }
+            }
+        }
+
+        # Motors.
+        for key, points in current_state.get('motors', {}).items():
+            descriptor = REPORT_SENSOR_DATA['motors'][key]
+            feed['sensors.generic']['motors-%s' % key] = {
+                'name': descriptor['name'],
+                'unit': descriptor['unit'],
+                'value': float(descriptor['aggregation'](points)),
+            }
+
+        # SFP modules.
+        for serial, sfp in current_state.get('sfp', {}).items():
+            for key, points in sfp.items():
+                descriptor = REPORT_SENSOR_DATA['sfp'][key]
+                feed['sensors.generic']['sfp-%s-%s' % (serial, key)] = {
+                    'name': descriptor['name'] % {'serial': serial},
+                    'unit': descriptor['unit'],
+                    'value': float(descriptor['aggregation'](points)),
+                }
+
+        # Post update to nodewatcher.
+        try:
+            request = requests.post(
+                NODEWATCHER_PUSH_URL % {'uuid': str(node_uuid)},
+                data=json.dumps(feed),
+                cert=(NODEWATCHER_CERTIFICATE, NODEWATCHER_PRIVATE_KEY),
+            )
+
+            # Check for successful post.
+            if request.json()['status'] != 'ok':
+                print "WARNING: Received failure while pushing to nodewatcher."
+            else:
+                print "OK: Data pushed to nodewatcher."
+        except (requests.HTTPError, requests.ConnectionError, ValueError):
+            print "WARNING: Failed to push data to nodewatcher."

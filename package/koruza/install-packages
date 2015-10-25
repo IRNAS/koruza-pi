@@ -1,6 +1,24 @@
 #!/bin/bash -e
 
+# Install Debian packages.
 apt-get update
 apt-get install --yes --force-yes runit i2c-tools python-pip libffi-dev libffi5 python-dev python-smbus
-pip install -r /koruza/requirements.txt
 
+# Install nanomsg library if not already installed.
+if [ ! -f /usr/lib/libnanomsg.so.0.2.2 ]; then
+  WORK_DIR="$(pwd)"
+  rm -rf /tmp/build-nanomsg
+  mkdir -p /tmp/build-nanomsg
+  cd /tmp/build-nanomsg
+  wget https://github.com/nanomsg/nanomsg/releases/download/0.6-beta/nanomsg-0.6-beta.tar.gz
+  tar xf nanomsg-0.6-beta.tar.gz
+  cd nanomsg-0.6-beta
+  ./configure --prefix=/usr
+  make
+  make install
+  rm -rf /tmp/build-nanomsg
+  cd "${WORK_DIR}"
+fi
+
+# Install Python packages.
+pip install -r /koruza/requirements.txt

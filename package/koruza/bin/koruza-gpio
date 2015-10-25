@@ -1,85 +1,95 @@
-#!/usr/bin/python
-
-import RPi.GPIO as GPIO 
-import time 
+#!/usr/bin/env python
+import RPi.GPIO as GPIO
+import time
 import json
-import sys
-import termios
-import tty
-import sqlite3
+import nnpy
+import select
 
-#Pin definitions per BCM
-led1=19 #status led
-led2=13 #link established 
-led3=12 #motors moving
-sw1=22 #3.3V power rail for laser
-sw2=27 #9V output for SFP, initialize HIGH
-sw3=17 #24V unregulated channel (for heaters and stuff)
-sw4=4 #drain output for 3.3V channel, for laser or similar
-in1=16 #input for reed switch
+# LEDs.
+PIN_LED_STATUS = 19
+PIN_LED_LINK = 13
+PIN_LED_MOTORS = 12
+# 3.3V power rail for laser.
+PIN_SW_LASER_POWER = 22
+# 9V output for SFP, initialize HIGH.
+PIN_SW_SFP_OUTPUT = 27
+# 24V unregulated channel (for heaters and stuff).
+PIN_SW_UNREGULATED = 17
+# Drain output for 3.3V channel (for laser or similar).
+PIN_SW_DRAIN = 4
+# Input for reed switch.
+PIN_IN_SWITCH = 16
 
+# Enable pins.
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(PIN_LED_STATUS, GPIO.OUT)
+GPIO.setup(PIN_LED_LINK, GPIO.OUT)
+GPIO.setup(PIN_LED_MOTORS, GPIO.OUT)
+GPIO.setup(PIN_SW_LASER_POWER, GPIO.OUT)
+GPIO.setup(PIN_SW_SFP_OUTPUT, GPIO.OUT)
+GPIO.setup(PIN_SW_UNREGULATED, GPIO.OUT)
+GPIO.setup(PIN_SW_DRAIN, GPIO.OUT)
+GPIO.setup(PIN_IN_SWITCH, GPIO.IN)
+# Set up initial values.
+GPIO.output(PIN_LED_STATUS, GPIO.HIGH)
+GPIO.output(PIN_LED_LINK, GPIO.HIGH)
+GPIO.output(PIN_LED_MOTORS, GPIO.HIGH)
+GPIO.output(PIN_SW_LASER_POWER, GPIO.LOW)
+GPIO.output(PIN_SW_SFP_OUTPUT, GPIO.HIGH)
+GPIO.output(PIN_SW_UNREGULATED, GPIO.LOW)
+GPIO.output(PIN_SW_DRAIN, GPIO.LOW)
 
+# Establish IPC connection.
+ipc = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
+ipc.connect('ipc:///tmp/koruza-publish.ipc')
+ipc.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, '')
 
-#enable pins
-GPIO . setwarnings ( False )
-GPIO . setmode ( GPIO.BCM ) 
-GPIO . setup ( led1, GPIO.OUT )
-GPIO . setup ( led2, GPIO.OUT ) 
-GPIO . setup ( led3, GPIO.OUT ) 
-GPIO . setup ( sw1, GPIO.OUT ) 
-GPIO . setup ( sw2, GPIO.OUT )
-GPIO . setup ( sw3, GPIO.OUT )
-GPIO . setup ( sw4, GPIO.OUT )
-GPIO . setup ( in1, GPIO.IN )
-#set up initial values
-GPIO . output ( led1, GPIO.HIGH)
-GPIO . output ( led2, GPIO.HIGH)
-GPIO . output ( led3, GPIO.HIGH)
-GPIO . output ( sw1, GPIO.LOW)
-GPIO . output ( sw2, GPIO.HIGH)
-GPIO . output ( sw3, GPIO.LOW)
-GPIO . output ( sw4, GPIO.LOW)
+poll = select.poll()
+poll.register(ipc.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD), select.POLLIN)
 
+# Initialize last known state.
 status_x = 0
 status_y = 0
 status_f = 0
 rx_power = 0
+led_status = GPIO.HIGH
+last_led_toggle = time.time()
+last_watchdog = time.time()
 
-print("Here we go! Press CTRL+C to exit")
-try:
-    while 1:
-		conn = sqlite3 . connect ( '/var/tmp/koruza/database.db' )
-		cur = conn . cursor ()
+while True:
+    # Check for incoming updates.
+    fds = poll.poll(100)
+    if fds:
+        topic, payload = ipc.recv().split('\x00')
+        data = json.loads(payload)
+        if data['type'] == 'motors':
+            status_x = data['motor']['status_x']
+            status_y = data['motor']['status_y']
+            status_f = data['motor']['status_f']
+        elif data['type'] == 'sfp':
+            # TODO: Properly support multiple SFP modules.
+            rx_power = data['sfp'].values()[0]['rx_power_mw']
+        elif data['type'] == 'watchdog':
+            last_watchdog = time.time()
 
-		cur . execute ( 'SELECT motor_status_x FROM local' )
-		status_x = cur . fetchone () [ 0 ]
-		cur . execute ( 'SELECT motor_status_y FROM local' )
-                status_y = cur . fetchone () [ 0 ]
-		cur . execute ( 'SELECT motor_status_f FROM local' )
-                status_f = cur . fetchone () [ 0 ]
-		cur . execute ( 'SELECT sfp_rx_power_mw FROM local' )
-                rx_power = cur . fetchone () [ 0 ]
+    # Update GPIOs.
+    if status_x == 1 or status_y == 1 or status_f == 1:
+        GPIO.output(PIN_LED_MOTORS, GPIO.HIGH)
+    else:
+        GPIO.output(PIN_LED_MOTORS, GPIO.LOW)
 
-		conn . close () 
+    if rx_power > 0.0010:
+        GPIO.output(PIN_LED_LINK, GPIO.HIGH)
+    else:
+        GPIO.output(PIN_LED_LINK, GPIO.LOW)
 
-
-		#evaluate if moving
-		if int(status_x)==1 or int(status_y)==1 or int(status_f)==1:
-			GPIO . output ( led3, GPIO.HIGH )
-		else:
-			GPIO . output ( led3, GPIO.LOW )
-		#evaluate power
-		if float(rx_power)>0.0010:
-			GPIO . output ( led2, GPIO.HIGH )
-		else:
-			GPIO . output ( led2, GPIO.LOW )
-		#evaluate input
-		if(GPIO.input(sw4) ==1):
-			print "reed"
-		#led1 should blink when all is operating normally
-		GPIO . output ( led1, GPIO.HIGH )
-		time.sleep(0.5)
-		GPIO . output ( led1, GPIO.LOW )
-		time.sleep(0.5)
-except KeyboardInterrupt: # If CTRL+C is pressed, exit cleanly:
-    GPIO.cleanup() # cleanup all GPIO
+    # Toggle status LED.
+    now = time.time()
+    if now - last_watchdog > 70:
+        led_status = GPIO.HIGH
+        GPIO.output(PIN_LED_STATUS, GPIO.HIGH)
+    elif now - last_led_toggle > 0.5:
+        led_status = GPIO.HIGH if led_status == GPIO.LOW else GPIO.LOW
+        GPIO.output(PIN_LED_STATUS, led_status)
+        last_led_toggle = now
