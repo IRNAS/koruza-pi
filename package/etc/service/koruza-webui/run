@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd /koruza/webui
+exec /usr/bin/python /koruza/webui/app.py 2>&1
+

@@ -53,9 +53,13 @@ class IPC(object):
 
         self._controller = controller
 
-        # Publish endpoint.
+        # Local publish endpoint.
         self._publish = nnpy.Socket(nnpy.AF_SP, nnpy.PUB)
         self._publish.bind('ipc:///tmp/koruza-publish.ipc')
+
+        # Remote publish endpoint.
+        self._publish_remote = nnpy.Socket(nnpy.AF_SP, nnpy.PUB)
+        self._publish_remote.bind('tcp://*:7100')
 
         # Command endpoint.
         self._command = nnpy.Socket(nnpy.AF_SP, nnpy.REP)
@@ -143,7 +147,11 @@ class IPC(object):
         })
 
     def publish(self, topic, data):
-        self._publish.send('%s\x00%s' % (topic, json.dumps(data)))
+        msg = '%s\x00%s' % (topic, json.dumps(data))
+
+        # Publish the message to local and remote receivers.
+        self._publish.send(msg)
+        self._publish_remote.send(msg)
 
     def publish_event(self, event, **data):
         event = {
@@ -482,6 +490,7 @@ class Controller(object):
         self.ipc.publish(IPC.TOPIC_STATUS, {
             'type': IPC.TYPE_SFP,
             'sfp': sfps,
+            'metadata': [sfp.serialize() for sfp in self.sfp],
         })
 
     def read_motor(self):
@@ -499,6 +508,7 @@ class Controller(object):
         self.ipc.publish(IPC.TOPIC_STATUS, {
             'type': IPC.TYPE_MOTORS,
             'motor': status,
+            'metadata': self.motor.serialize(),
         })
 
     def start(self):
