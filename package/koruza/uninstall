@@ -1,4 +1,5 @@
 #!/bin/bash
 
+sv stop koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors
 rm -rf /koruza /etc/service/koruza-* /var/tmp/koruza
-
+killall runsvdir

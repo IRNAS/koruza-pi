@@ -6,6 +6,7 @@ import subprocess
 import nnpy
 import select
 import time
+import math
 
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
@@ -113,11 +114,20 @@ class IPC(object):
                     if not self._controller.motor:
                         return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor not present.")
 
+                    found_argument = False
+                    for key in ('command', 'laser', 'speed', 'accel'):
+                        if key in data:
+                            data[key] = int(data[key])
+                            found_argument = True
+
+                    if not found_argument:
+                        return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing arguments.")
+
                     self._controller.motor.configure(
-                        command=int(data['motor_command']),
-                        laser=int(data['laser']),
-                        speed=int(data['speed']),
-                        accel=int(data['accel']),
+                        command=data.get('motor_command'),
+                        laser=data.get('laser'),
+                        speed=data.get('speed'),
+                        accel=data.get('accel'),
                     )
                     return self.reply_ok({'status': 'ok'})
                 except ValueError:
@@ -231,12 +241,23 @@ class SFP(DriverI2C):
             a = float((list[i] << 8) + list[i + 1])
             return (a / div)
 
+        def mw_to_db(power):
+            if not power:
+                return -10
+
+            return 10 * math.log10(tx_power_mw * 10000) - 10
+
+        tx_power_mw = conv(diag, 102, 10000)
+        rx_power_mw = conv(diag, 104, 10000)
+
         return {
             'temperature_c': conv(diag, 96, 256),
             'vcc_v': conv(diag, 98, 10000),
             'tx_bias_ma': conv(diag, 100, 500),
-            'tx_power_mw': conv(diag, 102, 10000),
-            'rx_power_mw': conv(diag, 104, 10000),
+            'tx_power_mw': tx_power_mw,
+            'tx_power_db': mw_to_db(tx_power_mw),
+            'rx_power_mw': rx_power_mw,
+            'rx_power_db': mw_to_db(rx_power_mw),
         }
 
     def serialize(self):
@@ -324,6 +345,21 @@ class Motor(DriverI2C):
         Configures the motor driver.
         """
 
+        # Read current data first.
+        current = self.read()
+        if not current:
+            return
+
+        if command is None:
+            command = current['command']
+        if laser is None:
+            laser = current['laser']
+        if speed is None:
+            speed = current['speed']
+        if accel is None:
+            accel = current['accel']
+
+        # Update configuration.
         self._bus.write_registers(
             Motor.ADDRESS,
             30,

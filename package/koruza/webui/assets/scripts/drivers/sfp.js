@@ -22,8 +22,8 @@ class SFPModule extends React.Component {
                         Temperature: {this.props.readings.temperature_c} °C<br/>
                         VCC: {this.props.readings.vcc_v} V<br/>
                         TX bias: {this.props.readings.tx_bias_ma} mA<br/>
-                        TX power: {this.props.readings.tx_power_mw} mW<br/>
-                        RX power: {this.props.readings.rx_power_mw} mW<br/>
+                        TX power: {this.props.readings.tx_power_mw} mW ({this.props.readings.tx_power_db} dB)<br/>
+                        RX power: {this.props.readings.rx_power_mw} mW ({this.props.readings.rx_power_db} dB)<br/>
                     </CardText>
                 </Card>
             </div>

@@ -4,6 +4,7 @@ import {Card, CardHeader, CardTitle, CardText} from 'material-ui/lib/card';
 import LinearProgress from 'material-ui/lib/linear-progress';
 import Toggle from 'material-ui/lib/toggle';
 import Snackbar from 'material-ui/lib/snackbar';
+import Slider from 'material-ui/lib/slider';
 
 import _ from 'underscore';
 
@@ -12,12 +13,15 @@ class MotorController extends React.Component {
         super(props);
 
         this.state = {
-            next_x: this.props.readings.next_x,
-            next_y: this.props.readings.next_y,
-            next_f: this.props.readings.next_f
+            controlEnabled: false,
+            steps: 1,
+            nextX: this.props.readings.next_x,
+            nextY: this.props.readings.next_y,
+            nextF: this.props.readings.next_f
         }
 
         this._onControlEnabledToggled = this._onControlEnabledToggled.bind(this);
+        this._onGreenLaserToggled = this._onGreenLaserToggled.bind(this);
         this._onKeydown = this._onKeydown.bind(this);
         this._requestMove = _.throttle(this._requestMove.bind(this), 100);
     }
@@ -28,14 +32,32 @@ class MotorController extends React.Component {
         } else {
             this.refs.snackbar.dismiss();
         }
+
+        this.setState({controlEnabled: toggled});
+    }
+
+    _onGreenLaserToggled(event, toggled) {
+        this.props.bus.command('motor_configure', {laser: toggled});
     }
 
     _onKeydown(event) {
+        if (!this.state.controlEnabled)
+            return;
+
+        let steps = this.refs.steps.getValue();
         let keymap = {
-            65: (state) => { state.next_x--; },
-            68: (state) => { state.next_x++; },
-            83: (state) => { state.next_y--; },
-            87: (state) => { state.next_y++; },
+            // A.
+            65: (state) => { state.nextX = Math.max(0, state.nextX - steps); },
+            // D.
+            68: (state) => { state.nextX = Math.min(70000, state.nextX + steps); },
+            // S.
+            83: (state) => { state.nextY = Math.max(0, state.nextY - steps); },
+            // W.
+            87: (state) => { state.nextY = Math.min(70000, state.nextY + steps); },
+            // V.
+            86: (state) => { state.nextF = Math.max(0, state.nextF - steps); },
+            // F.
+            70: (state) => { state.nextF = Math.min(20000, state.nextF + steps); },
         }
         if (!keymap[event.keyCode])
             return;
@@ -48,11 +70,10 @@ class MotorController extends React.Component {
     }
 
     _requestMove() {
-        let bus = this.props.bus;
-        bus.command('motor_move', {
-            next_x: this.state.next_x,
-            next_y: this.state.next_y,
-            next_f: this.state.next_f,
+        this.props.bus.command('motor_move', {
+            next_x: this.state.nextX,
+            next_y: this.state.nextY,
+            next_f: this.state.nextF,
         });
     }
 
@@ -84,8 +105,26 @@ class MotorController extends React.Component {
 
                 <Toggle
                     ref="controlEnabled"
-                    label="Enable keyboard motor control"
+                    label="Keyboard motor control enabled"
                     onToggle={this._onControlEnabledToggled}
+                />
+                <br/>
+
+                Number of steps:
+                <Slider
+                    name="steps"
+                    ref="steps"
+                    min={1}
+                    max={300}
+                    step={1}
+                    defaultValue={1}
+                    disabled={!this.state.controlEnabled}
+                />
+
+                <Toggle
+                    label="Green laser enabled"
+                    onToggle={this._onGreenLaserToggled}
+                    defaultToggled={this.props.readings.laser == 1}
                 />
             </div>
         )
@@ -134,6 +173,7 @@ export default class StatusMotors extends React.Component {
                 <div>
                     Current position: X: {this.state.readings.current_x}, Y: {this.state.readings.current_y}, F: {this.state.readings.current_f}<br/>
                     Requested position: X: {this.state.readings.next_x}, Y: {this.state.readings.next_y}, F: {this.state.readings.next_f}<br/>
+                    <br/>
                 </div>
             )
 

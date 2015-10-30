@@ -3,7 +3,6 @@ import flask_webpack
 import gevent
 from gevent import select
 import geventwebsocket
-import json
 import nnpy
 
 webpack = flask_webpack.Webpack()

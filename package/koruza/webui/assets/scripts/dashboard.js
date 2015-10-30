@@ -14,6 +14,7 @@ import injectTapEventPlugin from 'react-tap-event-plugin';
 import Bus from './bus';
 import StatusMotors from './drivers/motors';
 import StatusSFP from './drivers/sfp';
+import StatusGraph from './graph';
 
 class Status extends React.Component {
     render() {
@@ -21,9 +22,9 @@ class Status extends React.Component {
             <ClearFix>
                 <h2>Status</h2>
 
-                <StatusMotors bus={Bus} />
-                <br/>
-                <StatusSFP bus={Bus} />
+                <StatusGraph bus={Bus} /><br/>
+                <StatusMotors bus={Bus} /><br/>
+                <StatusSFP bus={Bus} /><br/>
             </ClearFix>
         );
     }
