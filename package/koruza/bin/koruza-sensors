@@ -115,7 +115,7 @@ class IPC(object):
                         return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor not present.")
 
                     found_argument = False
-                    for key in ('command', 'laser', 'speed', 'accel'):
+                    for key in ('motor_command', 'laser', 'speed', 'accel'):
                         if key in data:
                             data[key] = int(data[key])
                             found_argument = True
