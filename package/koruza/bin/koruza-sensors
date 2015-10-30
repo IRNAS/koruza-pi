@@ -98,10 +98,19 @@ class IPC(object):
                     if not self._controller.motor:
                         return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor not present.")
 
+                    found_argument = False
+                    for key in ('next_x', 'next_y', 'next_f'):
+                        if key in data:
+                            data[key] = int(data[key])
+                            found_argument = True
+
+                    if not found_argument:
+                        return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing arguments.")
+
                     self._controller.motor.move(
-                        next_x=int(data['next_x']),
-                        next_y=int(data['next_y']),
-                        next_f=int(data['next_f']),
+                        next_x=data.get('next_x'),
+                        next_y=data.get('next_y'),
+                        next_f=data.get('next_f'),
                     )
                     return self.reply_ok({'status': 'ok'})
                 except ValueError:
@@ -326,23 +335,35 @@ class Motor(DriverI2C):
         except TypeError:
             return None
 
-    def move(self, next_x, next_y, next_f):
+    def move(self, next_x=None, next_y=None, next_f=None):
         """
         Moves the motors.
         """
+
+        # Read current data first.
+        current = self.read()
+        if not current:
+            return
+
+        if next_x is None:
+            next_x = current['next_x']
+        if next_y is None:
+            next_y = current['next_y']
+        if next_f is None:
+            next_f = current['next_f']
 
         self._bus.write_registers(
             Motor.ADDRESS,
             0,
             struct.pack(
                 '=lll',
-                next_x,
-                next_y,
-                next_f,
+                max(0, next_x),
+                max(0, next_y),
+                max(0, next_f),
             )
         )
 
-    def configure(self, command, laser, speed, accel):
+    def configure(self, command=None, laser=None, speed=None, accel=None):
         """
         Configures the motor driver.
         """
@@ -373,6 +394,21 @@ class Motor(DriverI2C):
                 accel,
             )
         )
+
+        if command == 2:
+            # Home X.
+            self.move(next_x=0)
+        elif command == 3:
+            # Home Y.
+            self.move(next_y=0)
+        elif command == 4:
+            # Home F.
+            self.move(next_f=0)
+
+        if command > 0:
+            # Wait a little and reset the command.
+            time.sleep(0.1)
+            self.configure(command=0)
 
     def serialize(self):
         """
