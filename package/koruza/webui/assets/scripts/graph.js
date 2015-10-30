@@ -1,6 +1,7 @@
 import React from 'react';
 import Avatar from 'material-ui/lib/avatar';
 import {Card, CardHeader, CardTitle, CardText} from 'material-ui/lib/card';
+import LinearProgress from 'material-ui/lib/linear-progress';
 import ClearFix from 'material-ui/lib/clearfix';
 import Highcharts from 'react-highcharts/dist/bundle/highcharts';
 
@@ -10,6 +11,10 @@ import _ from 'underscore';
 export default class StatusGraph extends React.Component {
     constructor() {
         super();
+
+        this.state = {
+            haveAllReadings: false
+        }
 
         this._chartConfig = {
             chart: {
@@ -57,29 +62,57 @@ export default class StatusGraph extends React.Component {
             },
             series: [{
                 name: 'RX power',
+                colorByPoint: true,
                 data: []
             }]
         };
+
+        this._addReadings = this._addReadings.bind(this);
+    }
+
+    _addReadings(readings) {
+        if (!this.state.haveAllReadings)
+            return _.defer(this._addReadings, readings);
+
+        let chart = this.refs.chart.getChart();
+        let series = chart.series[0];
+
+        series.addPoint({
+            x: readings.positionX,
+            y: readings.positionY,
+            z: readings.power,
+            color: {
+                radialGradient: {
+                    cx: 0.4,
+                    cy: 0.3,
+                    r: 0.5
+                },
+                stops: [
+                    [0, readings.color],
+                    [1, Highcharts.Highcharts.Color(readings.color).brighten(-0.2).get('rgb')]
+                ]
+            }
+        });
     }
 
     componentDidMount() {
         let bus = this.props.bus;
-        let chart = this.refs.chart.getChart();
-        let series = chart.series[0];
         let colorConfig = {
             colormap: 'jet',
-            nshades: 80,
+            nshades: 50,
             format: 'hex'
         };
         let colors = colormap(colorConfig);
         let readings = {
             positionX: null,
             positionY: null,
-            power: null
+            power: null,
+            color: null
         }
 
         this._subscription = bus.subscribe('status', ['sfp', 'motors'], _.throttle((message) => {
             if (message.type == 'sfp') {
+                // TODO: What to do when we have multiple SFPs?
                 let power = Math.round(_.values(message.sfp)[0].rx_power_db);
                 if (power == readings.power)
                     return;
@@ -98,24 +131,21 @@ export default class StatusGraph extends React.Component {
             if (_.isNull(readings.positionX) || _.isNull(readings.power))
                 return;
 
-            let color = colors[Math.min(colorConfig.nshades, Math.max(0, Math.round(readings.power + 10)))];
+            readings.color = colors[
+                Math.min(
+                    colorConfig.nshades,
+                    Math.max(
+                        0,
+                        Math.round(readings.power + 10)
+                    )
+                )
+            ];
 
-            series.addPoint({
-                x: readings.positionX,
-                y: readings.positionY,
-                z: readings.power,
-                color: {
-                    radialGradient: {
-                        cx: 0.4,
-                        cy: 0.3,
-                        r: 0.5
-                    },
-                    stops: [
-                        [0, color],
-                        [1, Highcharts.Highcharts.Color(color).brighten(-0.2).get('rgb')]
-                    ]
-                }
-            });
+            if (!this.state.haveAllReadings) {
+                this.setState({haveAllReadings: true});
+            }
+
+            this._addReadings(readings);
         }, 300));
     }
 
@@ -124,6 +154,18 @@ export default class StatusGraph extends React.Component {
     }
 
     render() {
+        let chart;
+        if (this.state.haveAllReadings)
+            chart = <Highcharts ref="chart" config={this._chartConfig} isPureConfig={true} />;
+        else
+            chart = (
+                <div>
+                    Waiting for readings from the motor and SFP drivers…
+                    <br/><br/>
+                    <LinearProgress mode="indeterminate"  />
+                </div>
+            )
+
         return (
             <Card initiallyExpanded={true}>
                 <CardHeader
@@ -135,7 +177,7 @@ export default class StatusGraph extends React.Component {
                 />
 
                 <CardText expandable={true}>
-                    <Highcharts ref="chart" config={this._chartConfig} isPureConfig={true} />
+                    {chart}
                 </CardText>
             </Card>
         )

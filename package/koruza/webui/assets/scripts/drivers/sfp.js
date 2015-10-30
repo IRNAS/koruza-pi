@@ -7,6 +7,17 @@ import _ from 'underscore';
 
 class SFPModule extends React.Component {
     render() {
+        let readings = this.props.readings;
+        let readingKeys = [
+            'temperature_c', 'vcc_v',
+            'tx_bias_ma', 'tx_power_mw', 'tx_power_db',
+            'rx_power_mw', 'rx_power_db'
+        ]
+
+        for (let key of readingKeys) {
+            readings[key] = readings[key].toFixed(2);
+        }
+
         return (
             <div>
                 <Card initiallyExpanded={true}>
@@ -19,11 +30,11 @@ class SFPModule extends React.Component {
                     />
 
                     <CardText expandable={true}>
-                        Temperature: {this.props.readings.temperature_c} °C<br/>
-                        VCC: {this.props.readings.vcc_v} V<br/>
-                        TX bias: {this.props.readings.tx_bias_ma} mA<br/>
-                        TX power: {this.props.readings.tx_power_mw} mW ({this.props.readings.tx_power_db} dB)<br/>
-                        RX power: {this.props.readings.rx_power_mw} mW ({this.props.readings.rx_power_db} dB)<br/>
+                        Temperature: {readings.temperature_c} °C<br/>
+                        VCC: {readings.vcc_v} V<br/>
+                        TX bias: {readings.tx_bias_ma} mA<br/>
+                        TX power: {readings.tx_power_mw} mW ({readings.tx_power_db} dB)<br/>
+                        RX power: {readings.rx_power_mw} mW ({readings.rx_power_db} dB)<br/>
                     </CardText>
                 </Card>
             </div>

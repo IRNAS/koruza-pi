@@ -5,6 +5,7 @@ import LinearProgress from 'material-ui/lib/linear-progress';
 import Toggle from 'material-ui/lib/toggle';
 import Snackbar from 'material-ui/lib/snackbar';
 import Slider from 'material-ui/lib/slider';
+import RaisedButton from 'material-ui/lib/raised-button';
 
 import _ from 'underscore';
 
@@ -24,13 +25,16 @@ class MotorController extends React.Component {
         this._onGreenLaserToggled = this._onGreenLaserToggled.bind(this);
         this._onKeydown = this._onKeydown.bind(this);
         this._requestMove = _.throttle(this._requestMove.bind(this), 100);
+        this._onHomeXClicked = this._onHomeXClicked.bind(this);
+        this._onHomeYClicked = this._onHomeYClicked.bind(this);
+        this._onStopClicked = this._onStopClicked.bind(this);
     }
 
     _onControlEnabledToggled(event, toggled) {
         if (toggled) {
-            this.refs.snackbar.show();
+            this.refs.snackbarMotorControl.show();
         } else {
-            this.refs.snackbar.dismiss();
+            this.refs.snackbarMotorControl.dismiss();
         }
 
         this.setState({controlEnabled: toggled});
@@ -77,6 +81,21 @@ class MotorController extends React.Component {
         });
     }
 
+    _onHomeXClicked() {
+        this.props.bus.command('motor_configure', {'motor_command': 2});
+        this.refs.snackbarHomeX.show();
+    }
+
+    _onHomeYClicked() {
+        this.props.bus.command('motor_configure', {'motor_command': 3});
+        this.refs.snackbarHomeY.show();
+    }
+
+    _onStopClicked() {
+        this.props.bus.command('motor_configure', {'motor_command': 1});
+        this.refs.snackbarStop.show();
+    }
+
     componentDidMount() {
         window.addEventListener('keydown', this._onKeydown);
     }
@@ -98,8 +117,29 @@ class MotorController extends React.Component {
         return (
             <div style={styles.controller}>
                 <Snackbar
-                    ref="snackbar"
+                    ref="snackbarMotorControl"
                     message="Keyboard motor control is enabled."
+                    style={styles.snackbar}
+                />
+
+                <Snackbar
+                    ref="snackbarHomeX"
+                    message="Requested homing on X axis."
+                    autoHideDuration={1000}
+                    style={styles.snackbar}
+                />
+
+                <Snackbar
+                    ref="snackbarHomeY"
+                    message="Requested homing on Y axis."
+                    autoHideDuration={1000}
+                    style={styles.snackbar}
+                />
+
+                <Snackbar
+                    ref="snackbarStop"
+                    message="Requested to stop all motion."
+                    autoHideDuration={1000}
                     style={styles.snackbar}
                 />
 
@@ -125,6 +165,22 @@ class MotorController extends React.Component {
                     label="Green laser enabled"
                     onToggle={this._onGreenLaserToggled}
                     defaultToggled={this.props.readings.laser == 1}
+                />
+                <br/>
+
+                <RaisedButton
+                    label="Home X"
+                    onTouchTap={this._onHomeXClicked}
+                />
+                &nbsp;
+                <RaisedButton
+                    label="Home Y"
+                    onTouchTap={this._onHomeYClicked}
+                />
+                &nbsp;
+                <RaisedButton
+                    label="Stop"
+                    onTouchTap={this._onStopClicked}
                 />
             </div>
         )

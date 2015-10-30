@@ -236,16 +236,18 @@ class SFP(DriverI2C):
         """
 
         diag = self._bus.read_registers(SFP.ADDRESS_B, 0, 256)
+        if not diag:
+            return None
 
         def conv(list, i, div):
             a = float((list[i] << 8) + list[i + 1])
             return (a / div)
 
         def mw_to_db(power):
-            if not power:
+            if power < 0.0001:
                 return -10
 
-            return 10 * math.log10(tx_power_mw * 10000) - 10
+            return 10 * math.log10(power * 10000) - 10
 
         tx_power_mw = conv(diag, 102, 10000)
         rx_power_mw = conv(diag, 104, 10000)
@@ -481,26 +483,52 @@ class Controller(object):
             subprocess.call(["modprobe", "w1-gpio"])
             subprocess.call(["modprobe", "w1-therm"])
 
-        # TODO: We currently only support a single bus.
-        bus = Bus(self, 1)
-
-        self.sfp = []
-        # TODO: We currently only support a single SFP.
-        try:
-            self.sfp.append(SFP(self, bus))
-        except DeviceNotFound:
-            pass
-
-        try:
-            self.motor = Motor(self, bus)
-        except DeviceNotFound:
-            self.motor = None
+        self._bus = {}
+        self.initialize_motor()
+        self.initialize_sfp()
 
         # Annouce that we have initialized.
         self.ipc.publish_event(
             IPC.EVENT_STARTED,
             drivers=self.get_status(),
         )
+
+    def get_bus(self, address):
+        """
+        Returns a specified bus.
+
+        :param address: Bus identifier
+        :return: Bus instance
+        """
+
+        if address in self._bus:
+            return self._bus[address]
+
+        bus = Bus(self, address)
+        self._bus[address] = bus
+        return bus
+
+    def initialize_motor(self):
+        """
+        Initializes the motor driver.
+        """
+
+        try:
+            self.motor = Motor(self, self.get_bus(1))
+        except DeviceNotFound:
+            self.motor = None
+
+    def initialize_sfp(self):
+        """
+        Initializes the SFP drivers.
+        """
+
+        self.sfp = []
+        # TODO: We currently only support a single SFP.
+        try:
+            self.sfp.append(SFP(self, self.get_bus(1)))
+        except DeviceNotFound:
+            pass
 
     def get_status(self):
         """
@@ -520,7 +548,14 @@ class Controller(object):
         # Read data from SFP modules.
         sfps = {}
         for sfp in self.sfp:
-            sfps[sfp.serial] = sfp.read()
+            data = sfp.read()
+            if not data:
+                continue
+
+            sfps[sfp.serial] = data
+
+        if not sfps:
+            return
 
         # Publish SFP module state.
         self.ipc.publish(IPC.TOPIC_STATUS, {
@@ -556,6 +591,14 @@ class Controller(object):
 
         while True:
             self.ipc.poll()
+
+            # Attempt to reinitialize device drivers when not present.
+            if not self.motor:
+                self.initialize_motor()
+            if not self.sfp:
+                self.initialize_sfp()
+
+            # Read data from device drivers.
             self.read_motor()
             self.read_sfp()
 
