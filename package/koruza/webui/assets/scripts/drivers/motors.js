@@ -9,6 +9,8 @@ import RaisedButton from 'material-ui/lib/raised-button';
 
 import _ from 'underscore';
 
+import 'flexboxgrid';
+
 class MotorController extends React.Component {
     constructor(props) {
         super(props);
@@ -106,16 +108,13 @@ class MotorController extends React.Component {
 
     render() {
         let styles = {
-            controller: {
-                width: '300px',
-            },
             snackbar: {
                 zIndex: 20,
             }
         }
 
         return (
-            <div style={styles.controller}>
+            <div>
                 <Snackbar
                     ref="snackbarMotorControl"
                     message="Keyboard motor control is enabled."
@@ -143,45 +142,51 @@ class MotorController extends React.Component {
                     style={styles.snackbar}
                 />
 
-                <Toggle
-                    ref="controlEnabled"
-                    label="Keyboard motor control enabled"
-                    onToggle={this._onControlEnabledToggled}
-                />
-                <br/>
+                <div className="row">
+                    <div className="col-md-6">
+                        <Toggle
+                            ref="controlEnabled"
+                            label="Keyboard motor control enabled"
+                            onToggle={this._onControlEnabledToggled}
+                        />
+                        <br/>
 
-                Number of steps:
-                <Slider
-                    name="steps"
-                    ref="steps"
-                    min={1}
-                    max={300}
-                    step={1}
-                    defaultValue={1}
-                    disabled={!this.state.controlEnabled}
-                />
+                        Number of steps:
+                        <Slider
+                            name="steps"
+                            ref="steps"
+                            min={1}
+                            max={300}
+                            step={1}
+                            defaultValue={1}
+                            disabled={!this.state.controlEnabled}
+                        />
+                    </div>
 
-                <Toggle
-                    label="Green laser enabled"
-                    onToggle={this._onGreenLaserToggled}
-                    defaultToggled={this.props.readings.laser == 1}
-                />
-                <br/>
+                    <div className="col-md-6">
+                        <Toggle
+                            label="Green laser enabled"
+                            onToggle={this._onGreenLaserToggled}
+                            defaultToggled={this.props.readings.laser == 1}
+                        />
+                        <br/>
 
-                <RaisedButton
-                    label="Home X"
-                    onTouchTap={this._onHomeXClicked}
-                />
-                &nbsp;
-                <RaisedButton
-                    label="Home Y"
-                    onTouchTap={this._onHomeYClicked}
-                />
-                &nbsp;
-                <RaisedButton
-                    label="Stop"
-                    onTouchTap={this._onStopClicked}
-                />
+                        <RaisedButton
+                            label="Home X"
+                            onTouchTap={this._onHomeXClicked}
+                        />
+                        &nbsp;
+                        <RaisedButton
+                            label="Home Y"
+                            onTouchTap={this._onHomeYClicked}
+                        />
+                        &nbsp;
+                        <RaisedButton
+                            label="Stop"
+                            onTouchTap={this._onStopClicked}
+                        />
+                    </div>
+                </div>
             </div>
         )
     }
