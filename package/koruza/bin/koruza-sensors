@@ -7,7 +7,7 @@ import nnpy
 import select
 import time
 import math
-
+import traceback
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 
@@ -21,6 +21,8 @@ class IPC(object):
     TOPIC_PROCESS = 'process'
     # Status of the attached motors and SFP modules.
     TOPIC_STATUS = 'status'
+    # Requests for other applications on the bus.
+    TOPIC_APPLICATIONS = 'application.%s'
 
     # Payload types.
     TYPE_EVENT = 'event'
@@ -39,6 +41,7 @@ class IPC(object):
     COMMAND_GET_STATUS = 'get_status'
     COMMAND_MOTOR_MOVE = 'motor_move'
     COMMAND_MOTOR_CONFIG = 'motor_configure'
+    COMMAND_CALL_APPLICATION = 'call_application'
 
     # Error codes (reused from HTTP).
     ERROR_BAD_REQUEST = 400
@@ -143,9 +146,20 @@ class IPC(object):
                     return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor configuration variables must be integers.")
                 except KeyError, key:
                     return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing argument %s." % key)
+            elif command == IPC.COMMAND_CALL_APPLICATION:
+                # Forwards the call to an application on the bus.
+                try:
+                    application_id = data['application_id'].encode('ascii')
+                    payload = data['payload']
+
+                    self.publish(IPC.TOPIC_APPLICATIONS % application_id, payload)
+                    return self.reply_ok({'status': 'ok'})
+                except KeyError, key:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing argument %s." % key)
             else:
                 return self.reply_error(IPC.ERROR_NOT_IMPLEMENTED, "Command not implemented.")
         except:
+            traceback.print_exc()
             return self.reply_error(IPC.ERROR_INTERNAL_SERVER_ERROR, "Internal server error.")
 
     def reply(self, data):
