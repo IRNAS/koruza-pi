@@ -2,7 +2,9 @@
 
 # Install Debian packages.
 apt-get update
-apt-get install --yes --force-yes runit i2c-tools python-pip libffi-dev libffi5 python-dev python-smbus
+apt-get install --yes --force-yes \
+  runit i2c-tools python-pip libffi-dev libffi5 python-dev python-smbus \
+  watchdog
 
 # Install nanomsg library if not already installed.
 if [ ! -f /usr/lib/libnanomsg.so.0.2.2 ]; then
@@ -22,3 +24,15 @@ fi
 
 # Install Python packages.
 pip install -r /koruza/requirements.txt
+
+# Watchdog.
+WATCHDOG_CONF="/etc/watchdog.conf"
+echo "watchdog-device = /dev/watchdog" > ${WATCHDOG_CONF}
+echo "max-load-1 = 24" >> ${WATCHDOG_CONF}
+echo "realtime = yes" >> ${WATCHDOG_CONF}
+echo "priority = 1" >> ${WATCHDOG_CONF}
+echo "test-binary = /koruza/bin/koruza-watchdog" >> ${WATCHDOG_CONF}
+echo "test-timeout = 15" >> ${WATCHDOG_CONF}
+modprobe bcm2708_wdog
+update-rc.d watchdog defaults
+/etc/init.d/watchdog start
