@@ -18,7 +18,7 @@ KORUZA_UUID_NAMESPACE = uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e')
 # Nodewatcher push interval (in seconds).
 NODEWATCHER_PUSH_INTERVAL = 300
 # Nodewatcher push URL.
-NODEWATCHER_PUSH_URL = 'https://push.nodes.wlan-si.net/push/http/%(uuid)s'
+NODEWATCHER_PUSH_URL = 'https://push.nodewatcher.koruza.net/push/http/%(uuid)s'
 # Private key and certificate location.
 NODEWATCHER_CERTIFICATE = '/koruza/config/nodewatcher-authentication.crt'
 NODEWATCHER_PRIVATE_KEY = '/koruza/config/nodewatcher-authentication.key'
