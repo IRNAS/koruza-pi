@@ -7,7 +7,7 @@ import _ from 'underscore';
 
 class SFPModule extends React.Component {
     render() {
-        let readings = this.props.readings;
+        let readings = _.clone(this.props.readings);
         let readingKeys = [
             'temperature_c', 'vcc_v',
             'tx_bias_ma', 'tx_power_mw', 'tx_power_db',

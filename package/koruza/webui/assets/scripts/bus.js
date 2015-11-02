@@ -26,6 +26,7 @@ class Bus {
         this._url = `ws://${location.host}/ws`;
         this._socket = new WebSocket(this._url);
         this._socket.onmessage = (event) => {this._messageReceived(event)};
+        this._socket.onopen = (event) => {this._processCommandQueue()};
         this._subscribers = {};
         this._commandQueue = [];
     }
@@ -52,7 +53,9 @@ class Bus {
         if (!this._commandQueue.length)
             return;
 
-        this._socket.send(JSON.stringify(this._commandQueue[0].data));
+        if (this._socket.readyState == WebSocket.OPEN) {
+            this._socket.send(JSON.stringify(this._commandQueue[0].data));
+        }
     }
 
     command(command, data, callback) {
@@ -74,7 +77,7 @@ class Bus {
 
             let command = this._commandQueue[0];
             if (_.isFunction(command.callback)) {
-                command.callback(data);
+                command.callback(JSON.parse(data));
             }
 
             this._commandQueue.shift();

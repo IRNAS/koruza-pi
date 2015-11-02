@@ -8,6 +8,7 @@ import select
 import time
 import math
 import traceback
+import uuid
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 
@@ -520,6 +521,12 @@ class Controller(object):
         Class constructor.
         """
 
+        # Initialize node UUID from device's MAC address.
+        self._uuid = uuid.uuid5(
+            uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e'),
+            hex(uuid.getnode()).upper()[2:-1]
+        )
+
         self.ipc = IPC(self)
 
         # Load configuration.
@@ -586,6 +593,7 @@ class Controller(object):
         """
 
         return {
+            'uuid': str(self._uuid),
             'motor': self.motor.serialize() if self.motor else None,
             'sfp': [sfp.serialize() for sfp in self.sfp],
         }

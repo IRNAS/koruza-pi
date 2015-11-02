@@ -5,7 +5,7 @@ if [ ${EUID} -ne 0 ]; then
   exit 1
 fi
 
-sv stop koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors || true
+sv stop koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors 2>/dev/null || true
 /koruza/install-packages
 /koruza/install-config
 sv start koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors

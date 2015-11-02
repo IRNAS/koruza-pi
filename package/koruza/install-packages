@@ -31,8 +31,12 @@ echo "watchdog-device = /dev/watchdog" > ${WATCHDOG_CONF}
 echo "max-load-1 = 24" >> ${WATCHDOG_CONF}
 echo "realtime = yes" >> ${WATCHDOG_CONF}
 echo "priority = 1" >> ${WATCHDOG_CONF}
-echo "test-binary = /koruza/bin/koruza-watchdog" >> ${WATCHDOG_CONF}
-echo "test-timeout = 15" >> ${WATCHDOG_CONF}
+#echo "test-binary = /koruza/bin/koruza-watchdog" >> ${WATCHDOG_CONF}
+#echo "test-timeout = 60" >> ${WATCHDOG_CONF}
 modprobe bcm2708_wdog
 update-rc.d watchdog defaults
 /etc/init.d/watchdog start
+
+# Hostname.
+echo "koruza" > /etc/hostname
+/etc/init.d/hostname.sh

@@ -13,8 +13,6 @@ import select
 def average(points):
     return float(sum(points)) / len(points)
 
-# Namespace for KORUZA device UUIDs.
-KORUZA_UUID_NAMESPACE = uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e')
 # Nodewatcher push interval (in seconds).
 NODEWATCHER_PUSH_INTERVAL = 300
 # Nodewatcher push URL.
@@ -59,12 +57,17 @@ ipc = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
 ipc.connect('ipc:///tmp/koruza-publish.ipc')
 ipc.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, '')
 
+command_bus = nnpy.Socket(nnpy.AF_SP, nnpy.REQ)
+command_bus.connect('ipc:///tmp/koruza-command.ipc')
+
 poll = select.poll()
 poll.register(ipc.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD), select.POLLIN)
 
-# Generate node UUID from this node's MAC address.
-node_uuid = uuid.uuid5(KORUZA_UUID_NAMESPACE, hex(uuid.getnode()).upper()[2:-1])
-print "INIT: Initialized on node with UUID '%s'." % str(node_uuid)
+# Read node's UUID from the bus.
+command_bus.send(json.dumps({'type': 'command', 'command': 'get_status'}))
+node_status = json.loads(command_bus.recv())
+node_uuid = str(node_status['uuid'])
+print "INIT: Initialized on node with UUID '%s'." % node_uuid
 
 # Generate private key and certifikate if needed.
 if not os.path.exists(NODEWATCHER_CERTIFICATE) or not os.path.exists(NODEWATCHER_PRIVATE_KEY):
