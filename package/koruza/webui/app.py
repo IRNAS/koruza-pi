@@ -1,7 +1,7 @@
 import flask
 import flask_webpack
 import gevent
-from gevent import select
+from gevent import select, socket
 import geventwebsocket
 import nnpy
 
@@ -89,5 +89,9 @@ if __name__ == '__main__':
     gevent.spawn(router, publisher)
 
     # Start the web socket server.
-    server = geventwebsocket.WebSocketServer(('', 8080), app)
-    server.serve_forever()
+    try:
+        server = geventwebsocket.WebSocketServer(('', 80), app)
+        server.serve_forever()
+    except socket.error:
+        server = geventwebsocket.WebSocketServer(('', 8080), app)
+        server.serve_forever()
