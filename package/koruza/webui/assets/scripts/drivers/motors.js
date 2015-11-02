@@ -86,11 +86,13 @@ class MotorController extends React.Component {
     _onHomeXClicked() {
         this.props.bus.command('motor_configure', {'motor_command': 2});
         this.refs.snackbarHomeX.show();
+        this.setState({nextX: 0});
     }
 
     _onHomeYClicked() {
         this.props.bus.command('motor_configure', {'motor_command': 3});
         this.refs.snackbarHomeY.show();
+        this.setState({nextY: 0});
     }
 
     _onStopClicked() {
