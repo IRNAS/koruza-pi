@@ -1,72 +1,538 @@
-#!/usr/bin/python
-
+#!/usr/bin/env python
 import smbus
 import json
 import struct
-import sqlite3
 import subprocess
+import nnpy
+import select
 import time
-
+import math
+import traceback
+import uuid
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 
 
-class Controller(object):
-    # Device addresses on the I2C bus.
-    SFP_ADDRESS_A = 0x50
-    SFP_ADDRESS_B = 0x51
-    MOTOR_ADDRESS = 0x04
+class IPC(object):
+    """
+    Handler for KORUZA controller inter-process communication.
+    """
 
-    # Input commands.
-    COMMANDS = [
-        'motor_next_x',
-        'motor_next_y',
-        'motor_next_f',
-        'motor_command',
-        'motor_laser',
-        'motor_speed',
-        'motor_accel',
-    ]
+    # Information about the koruza-sensors process.
+    TOPIC_PROCESS = 'process'
+    # Status of the attached motors and SFP modules.
+    TOPIC_STATUS = 'status'
+    # Requests for other applications on the bus.
+    TOPIC_APPLICATIONS = 'application.%s'
+
+    # Payload types.
+    TYPE_EVENT = 'event'
+    TYPE_MOTORS = 'motors'
+    TYPE_SFP = 'sfp'
+    TYPE_COMMAND = 'command'
+    TYPE_COMMAND_REPLY = 'cmd_reply'
+    TYPE_COMMAND_ERROR = 'cmd_error'
+    TYPE_WATCHDOG = 'watchdog'
+
+    # Event types.
+    EVENT_STARTED = 'started'
+    EVENT_ERROR = 'error'
+
+    # Commands.
+    COMMAND_GET_STATUS = 'get_status'
+    COMMAND_MOTOR_MOVE = 'motor_move'
+    COMMAND_MOTOR_CONFIG = 'motor_configure'
+    COMMAND_CALL_APPLICATION = 'call_application'
+
+    # Error codes (reused from HTTP).
+    ERROR_BAD_REQUEST = 400
+    ERROR_INTERNAL_SERVER_ERROR = 500
+    ERROR_NOT_IMPLEMENTED = 501
+
+    def __init__(self, controller):
+        """
+        Class constructor.
+
+        :param controller: Controller instance
+        """
+
+        self._controller = controller
+
+        # Local publish endpoint.
+        self._publish = nnpy.Socket(nnpy.AF_SP, nnpy.PUB)
+        self._publish.bind('ipc:///tmp/koruza-publish.ipc')
+
+        # Remote publish endpoint.
+        self._publish_remote = nnpy.Socket(nnpy.AF_SP, nnpy.PUB)
+        self._publish_remote.bind('tcp://*:7100')
+
+        # Command endpoint.
+        self._command = nnpy.Socket(nnpy.AF_SP, nnpy.REP)
+        self._command.bind('ipc:///tmp/koruza-command.ipc')
+
+        self._poll = select.poll()
+        self._poll.register(self._command.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD), select.POLLIN)
+
+    def poll(self):
+        """
+        Polls the sockets for activity.
+        """
+
+        fds = self._poll.poll(10)
+        if not fds:
+            return
+
+        try:
+            data = json.loads(self._command.recv())
+            if data.get('type', None) != IPC.TYPE_COMMAND:
+                raise ValueError
+            elif not data.get('command', None):
+                raise ValueError
+        except ValueError:
+            return self.reply_error(IPC.ERROR_BAD_REQUEST, "Malformed request.")
+
+        try:
+            command = data['command']
+            if command == IPC.COMMAND_GET_STATUS:
+                # Returns general KORUZA controller status.
+                return self.reply_ok(self._controller.get_status())
+            elif command == IPC.COMMAND_MOTOR_MOVE:
+                # Instructs the motors to move to a specific position.
+                try:
+                    if not self._controller.motor:
+                        return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor not present.")
+
+                    found_argument = False
+                    for key in ('next_x', 'next_y', 'next_f'):
+                        if key in data:
+                            data[key] = int(data[key])
+                            found_argument = True
+
+                    if not found_argument:
+                        return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing arguments.")
+
+                    self._controller.motor.move(
+                        next_x=data.get('next_x'),
+                        next_y=data.get('next_y'),
+                        next_f=data.get('next_f'),
+                    )
+                    return self.reply_ok({'status': 'ok'})
+                except ValueError:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor positions must be integers.")
+                except KeyError, key:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing argument %s." % key)
+            elif command == IPC.COMMAND_MOTOR_CONFIG:
+                # Instructs the motors to reconfigure.
+                try:
+                    if not self._controller.motor:
+                        return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor not present.")
+
+                    found_argument = False
+                    for key in ('motor_command', 'laser', 'speed', 'accel'):
+                        if key in data:
+                            data[key] = int(data[key])
+                            found_argument = True
+
+                    if not found_argument:
+                        return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing arguments.")
+
+                    self._controller.motor.configure(
+                        command=data.get('motor_command'),
+                        laser=data.get('laser'),
+                        speed=data.get('speed'),
+                        accel=data.get('accel'),
+                    )
+                    return self.reply_ok({'status': 'ok'})
+                except ValueError:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Motor configuration variables must be integers.")
+                except KeyError, key:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing argument %s." % key)
+            elif command == IPC.COMMAND_CALL_APPLICATION:
+                # Forwards the call to an application on the bus.
+                try:
+                    application_id = data['application_id'].encode('ascii')
+                    payload = data['payload']
+
+                    self.publish(IPC.TOPIC_APPLICATIONS % application_id, payload)
+                    return self.reply_ok({'status': 'ok'})
+                except KeyError, key:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing argument %s." % key)
+            else:
+                return self.reply_error(IPC.ERROR_NOT_IMPLEMENTED, "Command not implemented.")
+        except:
+            traceback.print_exc()
+            return self.reply_error(IPC.ERROR_INTERNAL_SERVER_ERROR, "Internal server error.")
+
+    def reply(self, data):
+        self._command.send(json.dumps(data))
+
+    def reply_ok(self, data):
+        msg = {
+            'type': IPC.TYPE_COMMAND_REPLY,
+        }
+        msg.update(data)
+        self.reply(msg)
+
+    def reply_error(self, code, message):
+        self.reply({
+            'type': IPC.TYPE_COMMAND_ERROR,
+            'code': code,
+            'message': message,
+        })
+
+    def publish(self, topic, data):
+        msg = '%s\x00%s' % (topic, json.dumps(data))
+
+        # Publish the message to local and remote receivers.
+        self._publish.send(msg)
+        self._publish_remote.send(msg)
+
+    def publish_event(self, event, **data):
+        event = {
+            'type': IPC.TYPE_EVENT,
+            'event': event,
+        }
+        event.update(data)
+        self.publish(IPC.TOPIC_PROCESS, event)
+
+    def publish_error(self, message, **data):
+        self.publish_event(IPC.EVENT_ERROR, message=message, **data)
+
+
+class DeviceNotFound(Exception):
+    pass
+
+
+class DriverI2C(object):
+    """
+    Driver for an I2C device.
+    """
+
+    def __init__(self, controller, bus, check_address):
+        """
+        Class constructor.
+
+        :param controller: Controller instance
+        :param bus: Bus instance
+        :param check_address: Address that should be checked for device
+          presence
+        """
+
+        self._controller = controller
+        self._bus = bus
+
+        # Ensure that there is actually a module at this address.
+        try:
+            self._bus.write_byte(check_address, 0x00)
+        except IOError:
+            raise DeviceNotFound
+
+
+class SFP(DriverI2C):
+    """
+    SFP driver.
+    """
+
+    # Address offsets.
+    ADDRESS_A = 0x50
+    ADDRESS_B = 0x51
+
+    def __init__(self, controller, bus):
+        """
+        Class constructor.
+
+        :param controller: Controller instance
+        :param bus: Bus instance
+        """
+
+        super(SFP, self).__init__(controller, bus, SFP.ADDRESS_A)
+
+        # Obtain SFP metadata.
+        sfp_info_byte = self._bus.read_registers(SFP.ADDRESS_A, 0, 96)
+        sfp_info_byte = "".join([chr(x) for x in sfp_info_byte])
+        sfp_info = struct.unpack('=BBB8sBBBBBBBBB16sB3s16s4sBBBBHBB16s8sBBBB', sfp_info_byte)
+        self.serial = sfp_info[26].strip()
+        self.model = sfp_info[16].strip()
+
+    def read(self):
+        """
+        Reads sensor data for this SFP unit.
+        """
+
+        diag = self._bus.read_registers(SFP.ADDRESS_B, 0, 256)
+        if not diag:
+            return None
+
+        def conv(list, i, div):
+            a = float((list[i] << 8) + list[i + 1])
+            return (a / div)
+
+        def mw_to_db(power):
+            if power < 0.0001:
+                return -10
+
+            return 10 * math.log10(power * 10000) - 10
+
+        tx_power_mw = conv(diag, 102, 10000)
+        rx_power_mw = conv(diag, 104, 10000)
+
+        return {
+            'temperature_c': conv(diag, 96, 256),
+            'vcc_v': conv(diag, 98, 10000),
+            'tx_bias_ma': conv(diag, 100, 500),
+            'tx_power_mw': tx_power_mw,
+            'tx_power_db': mw_to_db(tx_power_mw),
+            'rx_power_mw': rx_power_mw,
+            'rx_power_db': mw_to_db(rx_power_mw),
+        }
+
+    def serialize(self):
+        """
+        Returns serialized data describing this SFP module.
+        """
+
+        return {
+            'bus': self._bus.bus,
+            'serial': self.serial,
+            'model': self.model,
+        }
+
+
+class Motor(DriverI2C):
+    """
+    Motor driver.
+    """
+
+    # Address offset.
+    ADDRESS = 0x04
+
+    def __init__(self, controller, bus):
+        """
+        Class constructor.
+
+        :param controller: Controller instance
+        :param bus: Bus instance
+        """
+
+        super(Motor, self).__init__(controller, bus, Motor.ADDRESS)
+
+    def read(self):
+        """
+        Reads status data for this motor driver.
+        """
+
+        try:
+            byte_data = self._bus.read_registers(Motor.ADDRESS, 0, 36)
+            if not byte_data:
+                return None
+
+            byte_data = "".join([chr(x) for x in byte_data])
+            data = struct.unpack('=llllllBBBBBBBBHH', byte_data)
+
+            return {
+                'next_x': data[0],
+                'next_y': data[1],
+                'next_f': data[2],
+                'current_x': data[3],
+                'current_y': data[4],
+                'current_f': data[5],
+                'status_x': data[6],
+                'status_y': data[7],
+                'status_f': data[8],
+                'empty': data[9],
+                'flash_status': data[10],
+                'flash_write_count': data[11],
+                'command': data[12],
+                'laser': data[13],
+                'speed': data[14],
+                'accel': data[15],
+            }
+        except TypeError:
+            return None
+
+    def move(self, next_x=None, next_y=None, next_f=None):
+        """
+        Moves the motors.
+        """
+
+        # Read current data first.
+        current = self.read()
+        if not current:
+            return
+
+        if next_x is None:
+            next_x = current['next_x']
+        if next_y is None:
+            next_y = current['next_y']
+        if next_f is None:
+            next_f = current['next_f']
+
+        self._bus.write_registers(
+            Motor.ADDRESS,
+            0,
+            struct.pack(
+                '=lll',
+                max(0, next_x),
+                max(0, next_y),
+                max(0, next_f),
+            )
+        )
+
+    def configure(self, command=None, laser=None, speed=None, accel=None):
+        """
+        Configures the motor driver.
+        """
+
+        # Read current data first.
+        current = self.read()
+        if not current:
+            return
+
+        if command is None:
+            command = current['command']
+        if laser is None:
+            laser = current['laser']
+        if speed is None:
+            speed = current['speed']
+        if accel is None:
+            accel = current['accel']
+
+        # Update configuration.
+        self._bus.write_registers(
+            Motor.ADDRESS,
+            30,
+            struct.pack(
+                '=BBHH',
+                command,
+                laser,
+                speed,
+                accel,
+            )
+        )
+
+        if command == 2:
+            # Home X.
+            self.move(next_x=0)
+        elif command == 3:
+            # Home Y.
+            self.move(next_y=0)
+        elif command == 4:
+            # Home F.
+            self.move(next_f=0)
+
+        if command > 0:
+            # Wait a little and reset the command.
+            time.sleep(0.1)
+            self.configure(command=0)
+
+    def serialize(self):
+        """
+        Returns serialized data describing this motor.
+        """
+
+        return {
+            'bus': self._bus.bus,
+        }
+
+
+class Bus(object):
+    """
+    A thin wrapper around SMBus.
+    """
+
+    def __init__(self, controller, bus):
+        """
+        Class constructor.
+
+        :param controller: Controller instance
+        :param bus: Bus identifier
+        """
+
+        self._smbus = smbus.SMBus(bus)
+        self._bus = bus
+        self._controller = controller
+
+    @property
+    def bus(self):
+        """
+        Returns the identifier of this bus.
+        """
+
+        return self._bus
+
+    def read_byte(self, *args, **kwargs):
+        return self._smbus.read_byte(*args, **kwargs)
+
+    def write_byte(self, *args, **kwargs):
+        return self._smbus.write_byte(*args, **kwargs)
+
+    def write_registers(self, address, offset, data):
+        """
+        Writes data to a specific address.
+        """
+
+        try:
+            # Convert string to a list of bytes.
+            converted = []
+            for byte in data:
+                converted.append(ord(byte))
+
+            self._smbus.write_block_data(address, offset, converted)
+        except IOError:
+            self._controller.ipc.publish_error(
+                "Failed to write to I2C bus.",
+                bus=self._bus,
+                address=address,
+                offset=offset,
+            )
+
+    def read_registers(self, address, offset, length):
+        """
+        Reads data from a specific address.
+        """
+
+        try:
+            self._smbus.write_byte(address, offset)
+            list = []
+            for i in range(0, length):
+                value = self._smbus.read_byte(address)
+                list.append(value)
+
+            return list
+        except IOError:
+            self._controller.ipc.publish_error(
+                "Failed to read from I2C bus.",
+                bus=self._bus,
+                address=address,
+                offset=offset,
+                length=length,
+            )
+
+        return []
+
+
+class Controller(object):
+    """
+    KORUZA controller.
+    """
 
     def __init__(self):
-        self.bus = smbus.SMBus(1)
-        self.state = {
-            'motor_next_x': 0,
-            'motor_next_y': 0,
-            'motor_next_f': 0,
-            'motor_current_x': 0,
-            'motor_current_y': 0,
-            'motor_current_f': 0,
-            'motor_max_x': 10000,
-            'motor_max_y': 10000,
-            'motor_max_f': 10000,
-            'motor_status_x': 0,
-            'motor_status_y': 0,
-            'motor_status_f': 0,
-            'motor_empty': 0,
-            'motor_flash_status': 0,
-            'motor_flash_write_count': 0,
-            'motor_laser': 0,
-            'motor_command': 0,
-            'motor_speed': 0,
-            'motor_accel': 0,
-            'case_temperature_c': 0,
-            'sfp_temperature_c': 0,
-            'sfp_vcc_v': 0,
-            'sfp_tx_bias_ma': 0,
-            'sfp_tx_power_mw': 0,
-            'sfp_rx_power_mw': 0,
-            'remote_connected': 0,
-        }
-        self.present_i2c_sfp = False
-        self.present_i2c_motor = False
-        self.last_snapshot = 0
+        """
+        Class constructor.
+        """
+
+        # Initialize node UUID from device's MAC address.
+        self._uuid = uuid.uuid5(
+            uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e'),
+            hex(uuid.getnode()).upper()[2:-1]
+        )
+
+        self.ipc = IPC(self)
 
         # Load configuration.
         with open(CONFIG_FILE, 'r') as config_file:
             self.config = json.load(config_file)
 
-    def initialize(self):
         # Check if all the required 1wire kernel modules are loaded and load them.
         loaded_modules = [x.split()[0] for x in open('/proc/modules').read().split('\n') if x]
         if 'w1_therm' not in loaded_modules or 'w1_gpio' not in loaded_modules:
@@ -74,224 +540,135 @@ class Controller(object):
             subprocess.call(["modprobe", "w1-gpio"])
             subprocess.call(["modprobe", "w1-therm"])
 
-        # Check if SFP present at 0x50, should also check for 0x51 to make sure SFP is compatible and further tests.
-        try:
-            self.bus.write_byte(Controller.SFP_ADDRESS_B, 0)
-            self.present_i2c_sfp = True
-        except IOError:
-            self.present_i2c_sfp = False
+        self._bus = {}
+        self.initialize_motor()
+        self.initialize_sfp()
 
-        # Check if motor driver present at 0x04.
-        try:
-            self.bus.write_byte(Controller.MOTOR_ADDRESS, 0)
-            self.present_i2c_motor = True
-        except IOError:
-            self.present_i2c_motor = False
-
-        print 'Motor driver present: %s' % self.present_i2c_motor
-        print 'SFP present: %s' % self.present_i2c_sfp
-
-        if self.present_i2c_sfp:
-            # Read SFP information.
-            sfp_info_byte = self.read_registers(Controller.SFP_ADDRESS_A, 0, 96)
-            sfp_info_byte = "".join([chr(x) for x in sfp_info_byte])
-            sfp_info = struct.unpack('=BBB8sBBBBBBBBB16sB3s16s4sBBBBHBB16s8sBBBB', sfp_info_byte)
-            print 'SFP serial: %s' % sfp_info[26]
-            print 'SFP model: %s' % sfp_info[16]
-
-        # Initialize the database.
-        self.create_tables()
-
-    def _database(self):
-        database = sqlite3.connect(self.config['database_path'])
-        database.row_factory = sqlite3.Row
-
-        return database
-
-    def create_tables(self):
-        columns = self.state.keys()
-        database = self._database()
-
-        # Create local and remote tables.
-        for table in ('local', 'remote'):
-            database.execute(
-                'CREATE TABLE IF NOT EXISTS %(table)s (%(columns)s)' % {
-                    'table': table,
-                    'columns': ', '.join(columns),
-                }
-            )
-
-        # Create historical data table.
-        columns = ['timestamp'] + columns
-        database.execute(
-            'CREATE TABLE IF NOT EXISTS local_history (%(columns)s)' % {
-                'table': table,
-                'columns': ', '.join(columns),
-            }
+        # Annouce that we have initialized.
+        self.ipc.publish_event(
+            IPC.EVENT_STARTED,
+            drivers=self.get_status(),
         )
 
-    def load(self):
-        database = self._database()
-        cursor = database.execute('SELECT * FROM local')
+    def get_bus(self, address):
+        """
+        Returns a specified bus.
+
+        :param address: Bus identifier
+        :return: Bus instance
+        """
+
+        if address in self._bus:
+            return self._bus[address]
+
+        bus = Bus(self, address)
+        self._bus[address] = bus
+        return bus
+
+    def initialize_motor(self):
+        """
+        Initializes the motor driver.
+        """
+
         try:
-            data = cursor.fetchone()
-            for key in data.keys():
-                if not key.startswith('motor_'):
-                    continue
+            self.motor = Motor(self, self.get_bus(1))
+        except DeviceNotFound:
+            self.motor = None
 
-                self.state[key] = int(data[key])
-        finally:
-            cursor.close()
-            database.close()
+    def initialize_sfp(self):
+        """
+        Initializes the SFP drivers.
+        """
 
-    def save(self):
-        self.state['remote_connected'] = 1
-
-        database = sqlite3.connect(self.config['database_path'])
+        self.sfp = []
+        # TODO: We currently only support a single SFP.
         try:
-            now = time.time()
-            snapshot = [('timestamp', now)]
-            for key, value in self.state.items():
-                # Do not overwrite command fields.
-                if key in Controller.COMMANDS:
-                    continue
+            self.sfp.append(SFP(self, self.get_bus(1)))
+        except DeviceNotFound:
+            pass
 
-                database.execute(
-                    'UPDATE local SET %(key)s = :value' % {
-                        'key': key,
-                    },
-                    {'value': value},
-                )
-                snapshot.append((key, value))
+    def get_status(self):
+        """
+        Returns the current status of all attached drivers.
+        """
 
-            if now - self.last_snapshot >= self.config['snapshot_interval']:
-                self.last_snapshot = now
+        return {
+            'uuid': str(self._uuid),
+            'motor': self.motor.serialize() if self.motor else None,
+            'sfp': [sfp.serialize() for sfp in self.sfp],
+        }
 
-                # Populate historic data with a new snapshot.
-                database.execute(
-                    'INSERT INTO local_history (%(columns)s) VALUES (%(placeholders)s)' % {
-                        'columns': ', '.join([x[0] for x in snapshot]),
-                        'placeholders': ', '.join(['?'] * len(snapshot)),
-                    },
-                    [x[1] for x in snapshot],
-                )
+    def read_sfp(self):
+        """
+        Reads and publishes SFP module data.
+        """
 
-                # Cleanup any old data.
-                database.execute(
-                    'DELETE FROM local_history WHERE timestamp < :window',
-                    {'window': now - self.config['snapshot_window']},
-                )
+        # Read data from SFP modules.
+        sfps = {}
+        for sfp in self.sfp:
+            data = sfp.read()
+            if not data:
+                continue
 
-            database.commit()
-        finally:
-            database.close()
+            sfps[sfp.serial] = data
 
-    def write_registers(self, address, offset, data):
-        try:
-            # Convert string to a list of bytes.
-            converted = []
-            for byte in data:
-                converted.append(ord(byte))
+        if not sfps:
+            return
 
-            self.bus.write_block_data(address, offset, converted)
-        except IOError:
-            print 'WARNING: i2c motor driver write unavailable!'
-
-    def read_registers(self, address, offset, length):
-        try:
-            self.bus.write_byte(address, offset)
-            list = []
-            for i in range(0, length):
-                value = self.bus.read_byte(address)
-                list.append(value)
-
-            return list
-        except IOError:
-            print 'WARNING: i2c motor driver read unavailable!'
-
-        return []
-
-    def read_sensors(self):
-        diag = self.read_registers(Controller.SFP_ADDRESS_B, 0, 256)
-        # TODO: 1wire disabled for now, must auto-detect sensor path.
-        #second_line = getSecondLine ()
-        #temperature_case    = format ( float ( second_line . split ( "=" ) [ 1 ] . rstrip () ) / 1000, '4.10f' )
-
-        def conv(list, i, div):
-            a = float((list[i] << 8) + list[i + 1])
-            return (a / div)
-
-        self.state.update({
-            'case_temperature_c': 0,
-            'sfp_temperature_c': format(conv(diag, 96, 256), '4.10f'),
-            'sfp_vcc_v': format(conv(diag, 98, 10000), '4.10f'),
-            'sfp_tx_bias_ma': format(conv(diag, 100, 500), '5.10f'),
-            'sfp_tx_power_mw': format(conv(diag, 102, 10000), '2.10f'),
-            'sfp_rx_power_mw': format(conv(diag, 104, 10000), '.10f'),
+        # Publish SFP module state.
+        self.ipc.publish(IPC.TOPIC_STATUS, {
+            'type': IPC.TYPE_SFP,
+            'sfp': sfps,
+            'metadata': [sfp.serialize() for sfp in self.sfp],
         })
 
-    def control_motors(self):
-        # Sending is a separate step due to 32 byte buffer limit and due to only some bytes being writable
-        # where the motors should move.
-        self.write_registers(
-            Controller.MOTOR_ADDRESS,
-            0,
-            struct.pack(
-                '=lll',
-                self.state['motor_next_x'],
-                self.state['motor_next_y'],
-                self.state['motor_next_f']
-            )
-        )
-        # Commands and configs.
-        self.write_registers(
-            Controller.MOTOR_ADDRESS,
-            30,
-            struct.pack(
-                '=BBHH',
-                self.state['motor_command'],
-                self.state['motor_laser'],
-                self.state['motor_speed'],
-                self.state['motor_accel']
-            )
-        )
+    def read_motor(self):
+        """
+        Reads and publishes motor data.
+        """
 
-        try:
-            # Now read values back from the motor short delay advised.
-            byte_data = self.read_registers(Controller.MOTOR_ADDRESS, 0, 36)
-            byte_data = "".join([chr(x) for x in byte_data])
-            data = struct.unpack('=llllllBBBBBBBBHH', byte_data)
+        if not self.motor:
+            return
 
-            self.state.update({
-                'motor_current_x': data[3],
-                'motor_current_y': data[4],
-                'motor_current_f': data[5],
-                'motor_status_x': data[6],
-                'motor_status_y': data[7],
-                'motor_status_f': data[8],
-                'motor_empty': data[9],
-                'motor_flash_status': data[10],
-                'motor_flash_write_count': data[11],
-            })
-        except TypeError:
-            print 'WARNING: Failed to read motor data!'
+        status = self.motor.read()
+        if not status:
+            return self.ipc.publish_error("Failed to read motor status.")
+
+        self.ipc.publish(IPC.TOPIC_STATUS, {
+            'type': IPC.TYPE_MOTORS,
+            'motor': status,
+            'metadata': self.motor.serialize(),
+        })
 
     def start(self):
+        """
+        Starts the control loop.
+        """
+
+        last_watchdog_event = 0
+
         while True:
-            self.load()
+            self.ipc.poll()
 
-            # Control the motors if driver is available.
-            if self.present_i2c_motor:
-                self.control_motors()
+            # Attempt to reinitialize device drivers when not present.
+            if not self.motor:
+                self.initialize_motor()
+            if not self.sfp:
+                self.initialize_sfp()
 
-            # Read sensor data if driver is available.
-            if self.present_i2c_sfp:
-                self.read_sensors()
+            # Read data from device drivers.
+            self.read_motor()
+            self.read_sfp()
 
-            # Persist data to the database.
-            self.save()
+            # Emit a watchdog message every 30 seconds so that other components can check
+            # if we are still alive.
+            if time.time() - last_watchdog_event > 30:
+                self.ipc.publish(IPC.TOPIC_PROCESS, {
+                    'type': IPC.TYPE_WATCHDOG,
+                    'time': time.time(),
+                })
+                last_watchdog_event = time.time()
 
 # Initialize and start the controller.
 controller = Controller()
-controller.initialize()
 controller.start()

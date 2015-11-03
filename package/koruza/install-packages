@@ -1,6 +1,51 @@
 #!/bin/bash -e
 
+# Install Debian packages.
 apt-get update
-apt-get install --yes --force-yes runit i2c-tools python-pip libffi-dev libffi5 python-dev python-smbus
+apt-get install --yes --force-yes \
+  runit i2c-tools python-pip libffi-dev libffi5 python-dev python-smbus \
+  libssl-dev watchdog
+
+# Ensure we have the latest pip as older versions may conflict with newer 'requests' package.
+easy_install -U pip
+
+# Install nanomsg library if not already installed.
+if [ ! -f /usr/lib/libnanomsg.so.0.2.2 ]; then
+  WORK_DIR="$(pwd)"
+  rm -rf /tmp/build-nanomsg
+  mkdir -p /tmp/build-nanomsg
+  cd /tmp/build-nanomsg
+  wget https://github.com/nanomsg/nanomsg/releases/download/0.6-beta/nanomsg-0.6-beta.tar.gz
+  tar xf nanomsg-0.6-beta.tar.gz
+  cd nanomsg-0.6-beta
+  ./configure --prefix=/usr
+  make
+  make install
+  rm -rf /tmp/build-nanomsg
+  cd "${WORK_DIR}"
+fi
+
+# Install Python packages.
 pip install -r /koruza/requirements.txt
 
+# Watchdog.
+WATCHDOG_CONF="/etc/watchdog.conf"
+echo "watchdog-device = /dev/watchdog" > ${WATCHDOG_CONF}
+echo "max-load-1 = 24" >> ${WATCHDOG_CONF}
+echo "realtime = yes" >> ${WATCHDOG_CONF}
+echo "priority = 1" >> ${WATCHDOG_CONF}
+#echo "test-binary = /koruza/bin/koruza-watchdog" >> ${WATCHDOG_CONF}
+#echo "test-timeout = 60" >> ${WATCHDOG_CONF}
+modprobe bcm2708_wdog
+update-rc.d watchdog defaults
+/etc/init.d/watchdog start
+
+# Hostname.
+echo "koruza" > /etc/hostname
+/etc/init.d/hostname.sh
+
+# Reverse SSH.
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+ssh-keyscan -H -p 27932 nodewatcher.koruza.net >> /root/.ssh/known_hosts
+chmod 600 /root/.ssh/known_hosts

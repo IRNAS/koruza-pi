@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec /koruza/bin/reverse-ssh 2>&1
+

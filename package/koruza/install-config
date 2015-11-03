@@ -27,5 +27,6 @@ with open('/etc/modules', 'r+') as modules_cfg:
         if line.strip() and not line.strip().startswith('#')
     ]
 
+    append_config(modules_cfg, 'bcm2708_wdog', existing_configuration)
     append_config(modules_cfg, 'i2c-dev', existing_configuration)
     append_config(modules_cfg, 'i2c-bcm2708', existing_configuration)
