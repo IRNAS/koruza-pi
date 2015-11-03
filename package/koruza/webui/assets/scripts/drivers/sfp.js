@@ -8,14 +8,20 @@ import _ from 'underscore';
 class SFPModule extends React.Component {
     render() {
         let readings = _.clone(this.props.readings);
-        let readingKeys = [
+        let readingKeys2 = [
             'temperature_c', 'vcc_v',
-            'tx_bias_ma', 'tx_power_mw', 'tx_power_db',
+            'tx_bias_ma'
+        ];
+        let readingKeys4 = [
+            'tx_power_mw', 'tx_power_db',
             'rx_power_mw', 'rx_power_db'
-        ]
+        ];
 
-        for (let key of readingKeys) {
+        for (let key of readingKeys2) {
             readings[key] = readings[key].toFixed(2);
+        }
+        for (let key of readingKeys4) {
+            readings[key] = readings[key].toFixed(4);
         }
 
         return (
