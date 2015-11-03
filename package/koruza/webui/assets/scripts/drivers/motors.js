@@ -114,7 +114,7 @@ class MotorController extends React.Component {
             'payload': {
                 'type': 'command',
                 'command': 'start',
-                'steps': steps,
+                'step': steps,
                 'threshold': threshold,
             }
         });
