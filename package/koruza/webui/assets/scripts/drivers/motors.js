@@ -6,6 +6,7 @@ import Toggle from 'material-ui/lib/toggle';
 import Snackbar from 'material-ui/lib/snackbar';
 import Slider from 'material-ui/lib/slider';
 import RaisedButton from 'material-ui/lib/raised-button';
+import TextField from 'material-ui/lib/text-field';
 
 import _ from 'underscore';
 
@@ -103,11 +104,18 @@ class MotorController extends React.Component {
     }
 
     _onStartScanClicked() {
+        let steps = parseInt(this.refs.scanSteps.getValue());
+        let threshold = parseInt(this.refs.scanThreshold.getValue());
+        if (isNaN(steps) || isNaN(threshold))
+            return;
+
         this.props.bus.command('call_application', {
             'application_id': 'spiral_scan',
             'payload': {
                 'type': 'command',
                 'command': 'start',
+                'steps': steps,
+                'threshold': threshold,
             }
         });
         this.refs.snackbarStartScan.show();
@@ -226,6 +234,19 @@ class MotorController extends React.Component {
                             onTouchTap={this._onStopClicked}
                         />
                         <br/><br/>
+
+                        <TextField
+                            ref="scanSteps"
+                            floatingLabelText="Scan steps"
+                            defaultValue={100}
+                        />
+                        <TextField
+                            ref="scanThreshold"
+                            floatingLabelText="Scan threshold"
+                            defaultValue={10}
+                        />
+                        <br/><br/>
+
                         <RaisedButton
                             label="Start scan"
                             onTouchTap={this._onStartScanClicked}
