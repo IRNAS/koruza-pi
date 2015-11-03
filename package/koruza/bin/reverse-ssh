@@ -1,0 +1,21 @@
+#!/bin/bash
+
+REMOTE_HOST="nodewatcher.koruza.net"
+REMOTE_PORT=27932
+PRIVATE_KEY="/koruza/config/reverse-ssh.key"
+
+establish_forward() {
+  local port=$1
+  ssh \
+    -o "ExitOnForwardFailure yes" \
+    -N \
+    -i ${PRIVATE_KEY} \
+    -p ${REMOTE_PORT} \
+    -R 127.0.0.1:${port}:127.0.0.1:22 \
+    reverse@${REMOTE_HOST}
+}
+
+for port in $(seq 10000 10099); do
+  establish_forward ${port}
+done
+
