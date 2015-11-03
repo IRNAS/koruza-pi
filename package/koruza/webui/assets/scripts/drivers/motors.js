@@ -140,6 +140,14 @@ class MotorController extends React.Component {
         window.removeEventListener('keydown', this._onKeydown);
     }
 
+    componentWillReceiveProps(props) {
+        this.setState({
+            nextX: props.readings.next_x,
+            nextY: props.readings.next_y,
+            nextF: props.readings.next_f
+        });
+    }
+
     render() {
         let styles = {
             snackbar: {
