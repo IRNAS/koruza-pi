@@ -524,7 +524,7 @@ class Controller(object):
         # Initialize node UUID from device's MAC address.
         self._uuid = uuid.uuid5(
             uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e'),
-            hex(uuid.getnode()).upper()[2:-1]
+            open('/sys/class/net/eth0/address').read().strip().replace(':', '').upper()
         )
 
         self.ipc = IPC(self)
