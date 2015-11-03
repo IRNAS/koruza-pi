@@ -21,13 +21,14 @@ class MotorController extends React.Component {
             steps: 1,
             nextX: this.props.readings.next_x,
             nextY: this.props.readings.next_y,
-            nextF: this.props.readings.next_f
+            nextF: this.props.readings.next_f,
+            nextState: null
         }
 
         this._onControlEnabledToggled = this._onControlEnabledToggled.bind(this);
         this._onGreenLaserToggled = this._onGreenLaserToggled.bind(this);
         this._onKeydown = this._onKeydown.bind(this);
-        this._requestMove = _.throttle(this._requestMove.bind(this), 100);
+        this._onKeyup = this._onKeyup.bind(this);
         this._onHomeXClicked = this._onHomeXClicked.bind(this);
         this._onHomeYClicked = this._onHomeYClicked.bind(this);
         this._onStopClicked = this._onStopClicked.bind(this);
@@ -71,18 +72,32 @@ class MotorController extends React.Component {
         if (!keymap[event.keyCode])
             return;
 
-        let state = _.clone(this.state);
-        keymap[event.keyCode](state);
+        let nextState;
+        if (!this.state.nextState)
+            nextState = _.pick(this.state, 'nextX', 'nextY', 'nextF');
+        else
+            nextState = this.state.nextState;
 
-        this.setState(state);
-        this._requestMove();
+        keymap[event.keyCode](nextState);
+        this.setState({nextState: nextState});
     }
 
-    _requestMove() {
+    _onKeyup(event) {
+        if (!this.state.controlEnabled || !this.state.nextState)
+            return;
+
+        let nextState = this.state.nextState;
+        this.setState({
+            nextX: nextState.nextX,
+            nextY: nextState.nextY,
+            nextF: nextState.nextF,
+            nextState: null
+        });
+
         this.props.bus.command('motor_move', {
-            next_x: this.state.nextX,
-            next_y: this.state.nextY,
-            next_f: this.state.nextF,
+            next_x: nextState.nextX,
+            next_y: nextState.nextY,
+            next_f: nextState.nextF,
         });
     }
 
@@ -134,10 +149,12 @@ class MotorController extends React.Component {
 
     componentDidMount() {
         window.addEventListener('keydown', this._onKeydown);
+        window.addEventListener('keyup', this._onKeyup);
     }
 
     componentWillUnmount() {
         window.removeEventListener('keydown', this._onKeydown);
+        window.removeEventListener('keyup', this._onKeyup);
     }
 
     componentWillReceiveProps(props) {
@@ -153,6 +170,16 @@ class MotorController extends React.Component {
             snackbar: {
                 zIndex: 20,
             }
+        }
+
+        let nextPosition;
+        if (this.state.nextState) {
+            nextPosition = (
+                <div>
+                    Release key to set position to:<br/>
+                    X: {this.state.nextState.nextX}, Y: {this.state.nextState.nextY}, F: {this.state.nextState.nextF}
+                </div>
+            );
         }
 
         return (
@@ -217,6 +244,8 @@ class MotorController extends React.Component {
                             defaultValue={1}
                             disabled={!this.state.controlEnabled}
                         />
+
+                        {nextPosition}
                     </div>
 
                     <div className="col-md-6">
