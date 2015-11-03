@@ -30,6 +30,8 @@ class MotorController extends React.Component {
         this._onHomeXClicked = this._onHomeXClicked.bind(this);
         this._onHomeYClicked = this._onHomeYClicked.bind(this);
         this._onStopClicked = this._onStopClicked.bind(this);
+        this._onStartScanClicked = this._onStartScanClicked.bind(this);
+        this._onStopScanClicked = this._onStopScanClicked.bind(this);
     }
 
     _onControlEnabledToggled(event, toggled) {
@@ -100,6 +102,28 @@ class MotorController extends React.Component {
         this.refs.snackbarStop.show();
     }
 
+    _onStartScanClicked() {
+        this.props.bus.command('call_application', {
+            'application_id': 'spiral_scan',
+            'payload': {
+                'type': 'command',
+                'command': 'start',
+            }
+        });
+        this.refs.snackbarStartScan.show();
+    }
+
+    _onStopScanClicked() {
+        this.props.bus.command('call_application', {
+            'application_id': 'spiral_scan',
+            'payload': {
+                'type': 'command',
+                'command': 'stop',
+            }
+        });
+        this.refs.snackbarStopScan.show();
+    }
+
     componentDidMount() {
         window.addEventListener('keydown', this._onKeydown);
     }
@@ -140,6 +164,20 @@ class MotorController extends React.Component {
                 <Snackbar
                     ref="snackbarStop"
                     message="Requested to stop all motion."
+                    autoHideDuration={1000}
+                    style={styles.snackbar}
+                />
+
+                <Snackbar
+                    ref="snackbarStartScan"
+                    message="Requested to start scan."
+                    autoHideDuration={1000}
+                    style={styles.snackbar}
+                />
+
+                <Snackbar
+                    ref="snackbarStopScan"
+                    message="Requested to stop scan."
                     autoHideDuration={1000}
                     style={styles.snackbar}
                 />
@@ -186,6 +224,16 @@ class MotorController extends React.Component {
                         <RaisedButton
                             label="Stop"
                             onTouchTap={this._onStopClicked}
+                        />
+                        <br/><br/>
+                        <RaisedButton
+                            label="Start scan"
+                            onTouchTap={this._onStartScanClicked}
+                        />
+                        &nbsp;
+                        <RaisedButton
+                            label="Stop scan"
+                            onTouchTap={this._onStopScanClicked}
                         />
                     </div>
                 </div>
