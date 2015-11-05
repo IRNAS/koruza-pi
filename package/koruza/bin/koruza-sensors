@@ -645,10 +645,12 @@ class Controller(object):
         Starts the control loop.
         """
 
+        last_read = 0
         last_watchdog_event = 0
 
         while True:
             self.ipc.poll()
+            now = time.time()
 
             # Attempt to reinitialize device drivers when not present.
             if not self.motor:
@@ -657,17 +659,19 @@ class Controller(object):
                 self.initialize_sfp()
 
             # Read data from device drivers.
-            self.read_motor()
-            self.read_sfp()
+            if now - last_read > 0.050:
+                self.read_motor()
+                self.read_sfp()
+                last_read = now
 
             # Emit a watchdog message every 30 seconds so that other components can check
             # if we are still alive.
-            if time.time() - last_watchdog_event > 30:
+            if now - last_watchdog_event > 30:
                 self.ipc.publish(IPC.TOPIC_PROCESS, {
                     'type': IPC.TYPE_WATCHDOG,
                     'time': time.time(),
                 })
-                last_watchdog_event = time.time()
+                last_watchdog_event = now
 
 # Initialize and start the controller.
 controller = Controller()
