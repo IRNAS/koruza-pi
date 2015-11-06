@@ -8,11 +8,24 @@ import uuid
 import OpenSSL
 import nnpy
 import select
+import math
 
 
 def average(points):
     return float(sum(points)) / len(points)
 
+def average_power_db(points):
+    # calculate power in dBu units
+    return 10*math.log10(average(points)*1000)-10
+    
+def variance(points):
+    # Calculate average on points
+    avg = average(points)
+    # Subtract mean from each value and square it
+    v[:] = [(x - avg)**2 for x in points]
+    # Calculate variance
+    return float(sum(v))/(len(v)-1)
+    
 # Nodewatcher push interval (in seconds).
 NODEWATCHER_PUSH_INTERVAL = 300
 # Nodewatcher push URL.
@@ -42,6 +55,8 @@ REPORT_SENSOR_DATA = {
     },
     'sfp': {
         'rx_power_mw': {'name': "SFP (%(serial)s) RX Power", 'unit': "mW", 'aggregation': average},
+        'rx_power_dbu': {'name': "SFP (%(serial)s) RX Power", 'unit': "dBu", 'aggregation': average_power_db},
+        'rx_power_var': {'name': "SFP (%(serial)s) RX Power variance", 'unit': "mW", 'aggregation': variance},
         'temperature_c': {'name': "SFP (%(serial)s) Temperature", 'unit': "C", 'aggregation': average},
         'tx_bias_ma': {'name': "SFP (%(serial)s) TX Bias", 'unit': "mA", 'aggregation': average},
         'tx_power_mw': {'name': "SFP (%(serial)s) TX Power", 'unit': "mW", 'aggregation': average},
@@ -49,7 +64,7 @@ REPORT_SENSOR_DATA = {
     }
 }
 # Snapshot interval (in seconds) and number of snapshots to keep for aggregation.
-SNAPSHOT_INTERVAL = 1
+SNAPSHOT_INTERVAL = 0.05
 SNAPSHOT_COUNT = int(NODEWATCHER_PUSH_INTERVAL / SNAPSHOT_INTERVAL)
 
 # Establish IPC connection.
