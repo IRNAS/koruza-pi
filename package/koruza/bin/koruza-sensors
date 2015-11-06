@@ -329,6 +329,12 @@ class Motor(DriverI2C):
             byte_data = "".join([chr(x) for x in byte_data])
             data = struct.unpack('=llllllBBBBBBBBHH', byte_data)
 
+            # Validate that data read is correct. The 'empty' variable should always have
+            # the value of 255, otherwise the read failed.
+            # TODO: Determine why read failure happens at all.
+            if data[9] != 255:
+                return None
+
             return {
                 'next_x': data[0],
                 'next_y': data[1],
