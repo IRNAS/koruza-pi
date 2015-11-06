@@ -4,7 +4,6 @@ import os
 import requests
 import sys
 import time
-import uuid
 import OpenSSL
 import nnpy
 import select
@@ -14,18 +13,27 @@ import math
 def average(points):
     return float(sum(points)) / len(points)
 
+
 def average_power_db(points):
-    # calculate power in dBu units
-    return 10*math.log10(average(points)*1000)-10
-    
-def variance(points):
-    # Calculate average on points
+    # Calculate power in dBu units.
     avg = average(points)
-    # Subtract mean from each value and square it
-    v[:] = [(x - avg)**2 for x in points]
-    # Calculate variance
-    return float(sum(v))/(len(v)-1)
-    
+    if not avg:
+        return -10
+
+    return 10 * math.log10(avg * 1000) - 10
+
+
+def variance(points):
+    # Calculate average on points.
+    avg = average(points)
+    # Subtract mean from each value and square it.
+    v = [(x - avg)**2 for x in points]
+    if len(v) <= 1:
+        return 0
+
+    # Calculate variance.
+    return float(sum(v)) / (len(v) - 1)
+
 # Nodewatcher push interval (in seconds).
 NODEWATCHER_PUSH_INTERVAL = 300
 # Nodewatcher push URL.
@@ -55,8 +63,8 @@ REPORT_SENSOR_DATA = {
     },
     'sfp': {
         'rx_power_mw': {'name': "SFP (%(serial)s) RX Power", 'unit': "mW", 'aggregation': average},
-        'rx_power_dbu': {'name': "SFP (%(serial)s) RX Power", 'unit': "dBu", 'aggregation': average_power_db},
-        'rx_power_var': {'name': "SFP (%(serial)s) RX Power variance", 'unit': "mW", 'aggregation': variance},
+        'rx_power_dbu': {'name': "SFP (%(serial)s) RX Power", 'unit': "dBu", 'aggregation': average_power_db, 'source': 'rx_power_mw'},
+        'rx_power_var': {'name': "SFP (%(serial)s) RX Power variance", 'unit': "mW", 'aggregation': variance, 'source': 'rx_power_mw'},
         'temperature_c': {'name': "SFP (%(serial)s) Temperature", 'unit': "C", 'aggregation': average},
         'tx_bias_ma': {'name': "SFP (%(serial)s) TX Bias", 'unit': "mA", 'aggregation': average},
         'tx_power_mw': {'name': "SFP (%(serial)s) TX Power", 'unit': "mW", 'aggregation': average},
@@ -142,24 +150,26 @@ while True:
             state = current_state.setdefault(data['type'], {})
 
             if data['type'] == 'motors':
-                for key in REPORT_SENSOR_DATA[data['type']]:
-                    if key not in data['motor']:
+                for key, descriptor in REPORT_SENSOR_DATA[data['type']].items():
+                    source_key = descriptor.get('source', key)
+                    if source_key not in data['motor']:
                         continue
 
                     points = state.setdefault(key, [])
-                    points.append(data['motor'][key])
+                    points.append(data['motor'][source_key])
                     if len(points) > SNAPSHOT_COUNT:
                         points.pop(0)
             elif data['type'] == 'sfp':
                 for serial, sfp in data['sfp'].items():
                     sfp_state = state.setdefault(serial, {})
 
-                    for key in REPORT_SENSOR_DATA[data['type']]:
-                        if key not in sfp:
+                    for key, descriptor in REPORT_SENSOR_DATA[data['type']].items():
+                        source_key = descriptor.get('source', key)
+                        if source_key not in sfp:
                             continue
 
                         points = sfp_state.setdefault(key, [])
-                        points.append(sfp[key])
+                        points.append(sfp[source_key])
                         if len(points) > SNAPSHOT_COUNT:
                             points.pop(0)
 
