@@ -29,6 +29,55 @@ class Bus {
         this._socket.onopen = (event) => {this._processCommandQueue()};
         this._subscribers = {};
         this._commandQueue = [];
+        this._authenticated = false;
+        this._authenticationListeners = [];
+    }
+
+    addAuthenticationListener(callback) {
+        if (this._authenticated)
+            return callback();
+
+        this._authenticationListeners.push(callback);
+    }
+
+    removeAuthenticationListener(callback) {
+        this._authenticationListeners = _.without(this._authenticationListeners, callback);
+    }
+
+    isAuthenticated() {
+        return this._authenticated;
+    }
+
+    authenticate(username, password, callback) {
+        if (this._authenticated)
+            return callback(true);
+
+        this.command('authenticate', {'username': username, 'password': password}, (reply) => {
+            if (reply.authenticated) {
+                this._authenticated = true;
+                callback(true);
+
+                // Invoke all authentication listeners.
+                for (let listener of this._authenticationListeners) {
+                    listener();
+                }
+            } else {
+                callback(false);
+            }
+        });
+    }
+
+    deauthenticate() {
+        this.command('deauthenticate', {}, (reply) => {
+            if (!reply.authenticated) {
+                this._authenticated = false;
+
+                // Invoke all authentication listeners.
+                for (let listener of this._authenticationListeners) {
+                    listener();
+                }
+            }
+        });
     }
 
     subscribe(topic, types, handler) {

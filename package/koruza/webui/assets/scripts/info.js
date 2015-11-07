@@ -4,9 +4,11 @@ import Avatar from 'material-ui/lib/avatar';
 
 import _ from 'underscore';
 
+import Bus from './bus';
+
 export default class UnitInformation extends React.Component {
-    constructor() {
-        super();
+    constructor(props) {
+        super(props);
 
         this.state = {
             uuid: null
@@ -14,7 +16,7 @@ export default class UnitInformation extends React.Component {
     }
 
     componentWillMount() {
-        this.props.bus.command('get_status', {}, (status) => {
+        Bus.command('get_status', {}, (status) => {
             this.setState({uuid: status.uuid});
         });
     }

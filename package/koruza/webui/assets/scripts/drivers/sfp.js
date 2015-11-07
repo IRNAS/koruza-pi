@@ -5,6 +5,8 @@ import ClearFix from 'material-ui/lib/clearfix';
 
 import _ from 'underscore';
 
+import Bus from '../bus';
+
 class SFPModule extends React.Component {
     render() {
         let readings = _.clone(this.props.readings);
@@ -49,8 +51,8 @@ class SFPModule extends React.Component {
 }
 
 export default class StatusSFP extends React.Component {
-    constructor() {
-        super();
+    constructor(props) {
+        super(props);
 
         this.state = {
             // A list of SFP module metadata.
@@ -61,8 +63,7 @@ export default class StatusSFP extends React.Component {
     }
 
     componentWillMount() {
-        let bus = this.props.bus;
-        this._subscription = bus.subscribe('status', ['sfp'], _.throttle((message) => {
+        this._subscription = Bus.subscribe('status', ['sfp'], _.throttle((message) => {
             this.setState({
                 modules: message.metadata,
                 readings: message.sfp,

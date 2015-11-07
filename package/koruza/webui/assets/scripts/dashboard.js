@@ -8,6 +8,7 @@ import Styles from 'material-ui/lib/styles';
 import AppCanvas from 'material-ui/lib/app-canvas';
 import LeftNav from 'material-ui/lib/left-nav';
 import ClearFix from 'material-ui/lib/clearfix';
+import RaisedButton from 'material-ui/lib/raised-button';
 
 import injectTapEventPlugin from 'react-tap-event-plugin';
 
@@ -16,6 +17,7 @@ import StatusMotors from './drivers/motors';
 import StatusSFP from './drivers/sfp';
 import StatusGraph from './graph';
 import UnitInformation from './info';
+import LoginDialog from './login';
 
 class Status extends React.Component {
     render() {
@@ -23,10 +25,10 @@ class Status extends React.Component {
             <ClearFix>
                 <h2>Status</h2>
 
-                <UnitInformation bus={Bus} /><br/>
-                <StatusGraph bus={Bus} /><br/>
-                <StatusMotors bus={Bus} /><br/>
-                <StatusSFP bus={Bus} /><br/>
+                <UnitInformation /><br/>
+                <StatusGraph /><br/>
+                <StatusMotors /><br/>
+                <StatusSFP /><br/>
             </ClearFix>
         );
     }
@@ -52,6 +54,14 @@ class Dashboard extends React.Component {
             { route: '/status', text: 'Status' },
             { route: '/about', text: 'About' },
         ];
+
+        this.state = {
+            authenticated: Bus.isAuthenticated(),
+        }
+
+        this._onAuthenticated = this._onAuthenticated.bind(this);
+        this._onLoginClicked = this._onLoginClicked.bind(this);
+        this._onLogoutClicked = this._onLogoutClicked.bind(this);
     }
 
     _getSelectedIndex() {
@@ -70,16 +80,68 @@ class Dashboard extends React.Component {
         this.props.history.pushState(null, payload.route);
     }
 
+    componentWillMount() {
+        // Listen for authentication events.
+        Bus.addAuthenticationListener(this._onAuthenticated);
+    }
+
+    _onAuthenticated() {
+        this.setState({
+            authenticated: Bus.isAuthenticated()
+        });
+    }
+
+    componentWillUnmount() {
+        Bus.removeAuthenticationListener(this._onAuthenticated);
+    }
+
+    _onLoginClicked() {
+        this.refs.loginDialog.show();
+    }
+
+    _onLogoutClicked() {
+        Bus.deauthenticate();
+    }
+
     render() {
         let styles = {
             content: {
                 marginLeft: '270px',
+            },
+            login: {
+                float: 'right',
             }
         };
+
+        let loginLogout;
+        if (this.state.authenticated) {
+            loginLogout = (
+                <ClearFix>
+                    <RaisedButton
+                        label="Logout"
+                        onTouchTap={this._onLogoutClicked}
+                    />
+                </ClearFix>
+            );
+        } else {
+            loginLogout = (
+                <ClearFix>
+                    <LoginDialog ref="loginDialog" />
+                    <RaisedButton
+                        label="Login"
+                        onTouchTap={this._onLoginClicked}
+                    />
+                </ClearFix>
+            );
+        }
 
         return (
             <AppCanvas>
                 <div style={styles.content}>
+                    <div style={styles.login}>
+                        {loginLogout}
+                    </div>
+
                     {this.props.children}
                 </div>
                 <LeftNav

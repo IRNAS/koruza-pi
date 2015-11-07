@@ -8,6 +8,8 @@ import Highcharts from 'react-highcharts/dist/bundle/highcharts';
 import colormap from 'colormap';
 import _ from 'underscore';
 
+import Bus from './bus';
+
 export default class StatusGraph extends React.Component {
     constructor() {
         super();
@@ -96,7 +98,6 @@ export default class StatusGraph extends React.Component {
     }
 
     componentDidMount() {
-        let bus = this.props.bus;
         let colorConfig = {
             colormap: 'jet',
             nshades: 50,
@@ -110,7 +111,7 @@ export default class StatusGraph extends React.Component {
             color: null
         }
 
-        this._subscription = bus.subscribe('status', ['sfp', 'motors'], _.throttle((message) => {
+        this._subscription = Bus.subscribe('status', ['sfp', 'motors'], _.throttle((message) => {
             if (message.type == 'sfp') {
                 // TODO: What to do when we have multiple SFPs?
                 let power = Math.round(_.values(message.sfp)[0].rx_power_db);

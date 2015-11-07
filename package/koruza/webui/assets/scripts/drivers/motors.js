@@ -12,6 +12,8 @@ import _ from 'underscore';
 
 import 'flexboxgrid';
 
+import Bus from '../bus';
+
 class MotorController extends React.Component {
     constructor(props) {
         super(props);
@@ -47,7 +49,7 @@ class MotorController extends React.Component {
     }
 
     _onGreenLaserToggled(event, toggled) {
-        this.props.bus.command('motor_configure', {laser: toggled});
+        Bus.command('motor_configure', {laser: toggled});
     }
 
     _onKeydown(event) {
@@ -94,7 +96,7 @@ class MotorController extends React.Component {
             nextState: null
         });
 
-        this.props.bus.command('motor_move', {
+        Bus.command('motor_move', {
             next_x: nextState.nextX,
             next_y: nextState.nextY,
             next_f: nextState.nextF,
@@ -102,19 +104,19 @@ class MotorController extends React.Component {
     }
 
     _onHomeXClicked() {
-        this.props.bus.command('motor_configure', {'motor_command': 2});
+        Bus.command('motor_configure', {'motor_command': 2});
         this.refs.snackbarHomeX.show();
         this.setState({nextX: 0});
     }
 
     _onHomeYClicked() {
-        this.props.bus.command('motor_configure', {'motor_command': 3});
+        Bus.command('motor_configure', {'motor_command': 3});
         this.refs.snackbarHomeY.show();
         this.setState({nextY: 0});
     }
 
     _onStopClicked() {
-        this.props.bus.command('motor_configure', {'motor_command': 1});
+        Bus.command('motor_configure', {'motor_command': 1});
         this.refs.snackbarStop.show();
     }
 
@@ -124,7 +126,7 @@ class MotorController extends React.Component {
         if (isNaN(steps) || isNaN(threshold))
             return;
 
-        this.props.bus.command('call_application', {
+        Bus.command('call_application', {
             'application_id': 'spiral_scan',
             'payload': {
                 'type': 'command',
@@ -137,7 +139,7 @@ class MotorController extends React.Component {
     }
 
     _onStopScanClicked() {
-        this.props.bus.command('call_application', {
+        Bus.command('call_application', {
             'application_id': 'spiral_scan',
             'payload': {
                 'type': 'command',
@@ -301,30 +303,43 @@ class MotorController extends React.Component {
 }
 
 export default class StatusMotors extends React.Component {
-    constructor() {
-        super();
+    constructor(props) {
+        super(props);
 
         this.state = {
+            // Authentication status.
+            authenticated: Bus.isAuthenticated(),
             // Motor metadata.
             metadata: {},
             // Motor readings.
             readings: {},
         }
+
+        this._onAuthenticated = this._onAuthenticated.bind(this);
     }
 
     componentWillMount() {
-        let bus = this.props.bus;
         // TODO: If there are no readings for some time, clear state.
-        this._subscription = bus.subscribe('status', ['motors'], _.throttle((message) => {
+        this._subscription = Bus.subscribe('status', ['motors'], _.throttle((message) => {
             this.setState({
                 metadata: message.metadata,
                 readings: message.motor,
             });
         }, 300));
+
+        // Listen for authentication events.
+        Bus.addAuthenticationListener(this._onAuthenticated);
+    }
+
+    _onAuthenticated() {
+        this.setState({
+            authenticated: Bus.isAuthenticated()
+        });
     }
 
     componentWillUnmount() {
         this._subscription.stop();
+        Bus.removeAuthenticationListener(this._onAuthenticated);
     }
 
     render() {
@@ -346,7 +361,11 @@ export default class StatusMotors extends React.Component {
                 </div>
             )
 
-            controller = <MotorController bus={this.props.bus} readings={this.state.readings} />
+            if (this.state.authenticated) {
+                // Only show the controller in case we are authenticated as we can't send any
+                // control commands if we are not.
+                controller = <MotorController readings={this.state.readings} />
+            }
         }
 
         return (
