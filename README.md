@@ -19,6 +19,16 @@ $ sudo /koruza/install
 
 And this should install and configure all the needed services.
 
+Upgrade
+-------
+
+To upgrade an existing installation, copy over the package as above and then
+run:
+
+```
+$ sudo /koruza/upgrade koruza-package.tar.bz2
+```
+
 Debugging the KORUZA IPC bus
 ----------------------------
 

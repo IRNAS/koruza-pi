@@ -47,5 +47,5 @@ echo "koruza" > /etc/hostname
 # Reverse SSH.
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
-ssh-keyscan -H -p 27932 nodewatcher.koruza.net >> /root/.ssh/known_hosts
+ssh-keyscan -H -p 27932 nodewatcher.koruza.net > /root/.ssh/known_hosts
 chmod 600 /root/.ssh/known_hosts
