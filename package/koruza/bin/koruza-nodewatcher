@@ -20,7 +20,7 @@ def average_power_db(points):
     if not avg:
         return -10
 
-    return 10 * math.log10(avg * 1000) - 10
+    return 10 * math.log10(avg * 10000) - 10
 
 
 def variance(points):
