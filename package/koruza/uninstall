@@ -2,6 +2,6 @@
 
 update-rc.d watchdog remove
 /etc/init.d/watchdog stop
-sv stop koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-reverse-ssh
+sv stop koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-vpn
 rm -rf /koruza /etc/service/koruza-* /var/tmp/koruza
 killall runsvdir

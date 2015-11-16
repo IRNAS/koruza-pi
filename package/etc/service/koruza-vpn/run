@@ -1,0 +1,3 @@
+#!/bin/bash -e
+
+exec /usr/sbin/openvpn --config /koruza/config/openvpn.conf 2>&1

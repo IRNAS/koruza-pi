@@ -11,7 +11,7 @@ if [ -z "${UPGRADE_PACKAGE}" ]; then
   exit 1
 fi
 
-# Do not shutdown the reverse-ssh service as otherwise we may lose connectivity.
+# Do not shutdown the vpn service as otherwise we may lose connectivity.
 UPGRADE_SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan"
 
 update-rc.d watchdog remove

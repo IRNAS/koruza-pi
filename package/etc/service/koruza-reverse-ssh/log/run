@@ -1,7 +1,0 @@
-#!/bin/bash -e
-
-mkdir -p /koruza/log/reverse-ssh
-chown nobody:nogroup /koruza/log/reverse-ssh
-
-exec chpst -u nobody:nogroup svlogd -tt /koruza/log/reverse-ssh
-

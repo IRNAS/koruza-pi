@@ -1,0 +1,7 @@
+#!/bin/bash -e
+
+mkdir -p /koruza/log/vpn
+chown nobody:nogroup /koruza/log/vpn
+
+exec chpst -u nobody:nogroup svlogd -tt /koruza/log/vpn
+
