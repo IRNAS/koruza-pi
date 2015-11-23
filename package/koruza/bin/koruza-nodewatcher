@@ -8,6 +8,9 @@ import OpenSSL
 import nnpy
 import select
 import math
+import socket
+import fcntl
+import struct
 
 
 def average(points):
@@ -130,6 +133,18 @@ if not os.path.exists(NODEWATCHER_CERTIFICATE) or not os.path.exists(NODEWATCHER
 else:
     print "INIT: Nodewatcher authentication certificate ready."
 
+
+def get_interface_ip(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(),
+            0x8915,  # SIOCGIFADDR
+            struct.pack('256s', ifname[:15])
+        )[20:24])
+    except IOError:
+        return None
+
 current_state = {}
 last_state_update = {}
 last_push = 0
@@ -183,6 +198,12 @@ while True:
                 '_meta': {
                     'version': 1,
                 }
+            },
+            'koruza.vpn': {
+                '_meta': {
+                    'version': 1,
+                },
+                'ip': get_interface_ip('tun0'),
             }
         }
 
