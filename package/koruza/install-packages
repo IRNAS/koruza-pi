@@ -10,19 +10,29 @@ apt-get install --yes --force-yes \
 easy_install -U pip
 
 # Install nanomsg library if not already installed.
-if [ ! -f /usr/lib/libnanomsg.so.0.2.2 ]; then
+if [ ! -f /usr/lib/libnanomsg.so.4.0.0 ]; then
+  # Purge previous version of the library.
+  rm -f /usr/lib/libnanomsg.*
+  rm -f /usr/lib/pkgconfig/libnanomsg.pc
+
+  # Purge Python packages built against the old library.
+  pip uninstall -y nnpy >/dev/null || true
+
   WORK_DIR="$(pwd)"
   rm -rf /tmp/build-nanomsg
   mkdir -p /tmp/build-nanomsg
   cd /tmp/build-nanomsg
-  wget https://github.com/nanomsg/nanomsg/releases/download/0.6-beta/nanomsg-0.6-beta.tar.gz
-  tar xf nanomsg-0.6-beta.tar.gz
-  cd nanomsg-0.6-beta
+  wget https://github.com/nanomsg/nanomsg/releases/download/0.8-beta/nanomsg-0.8-beta.tar.gz
+  tar xf nanomsg-0.8-beta.tar.gz
+  cd nanomsg-0.8-beta
   ./configure --prefix=/usr
   make
   make install
   rm -rf /tmp/build-nanomsg
   cd "${WORK_DIR}"
+
+  # Refresh dynamic libraries.
+  ldconfig
 fi
 
 # Install Python packages.

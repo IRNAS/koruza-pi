@@ -9,6 +9,8 @@ import time
 import math
 import traceback
 import uuid
+import os
+import threading
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 
@@ -29,6 +31,7 @@ class IPC(object):
     TYPE_EVENT = 'event'
     TYPE_MOTORS = 'motors'
     TYPE_SFP = 'sfp'
+    TYPE_1WIRE = '1wire'
     TYPE_COMMAND = 'command'
     TYPE_COMMAND_REPLY = 'cmd_reply'
     TYPE_COMMAND_ERROR = 'cmd_error'
@@ -201,6 +204,68 @@ class IPC(object):
 
 class DeviceNotFound(Exception):
     pass
+
+
+class DriverOneWire(object):
+    """
+    Driver for a 1wire device.
+    """
+
+    def __init__(self, controller, device_id):
+        """
+        Class constructor.
+
+        :param controller: Controller instance
+        :param device_id: Identifier of the given 1wire device
+        """
+
+        self._controller = controller
+        self.device_id = device_id
+
+        try:
+            self._read_raw()
+        except IOError:
+            raise DeviceNotFound
+
+    def _read_raw(self):
+        return open('/sys/bus/w1/devices/%s/w1_slave' % self.device_id).read()
+
+    def serialize(self):
+        """
+        Returns serialized data describing this 1wire device.
+        """
+
+        return {
+            'device_id': self.device_id,
+        }
+
+
+class TemperatureSensor(DriverOneWire):
+    """
+    1wire temperature sensor driver.
+    """
+
+    def read(self):
+        try:
+            raw = self._read_raw()
+            temperature = float(raw.split('\n')[1].split(' ')[9].split('=')[1]) / 1000.
+        except (IOError, IndexError):
+            return None
+
+        return {
+            'temperature_c': temperature,
+        }
+
+    def serialize(self):
+        """
+        Returns serialized data describing this temperature sensor.
+        """
+
+        data = super(TemperatureSensor, self).serialize()
+        data.update({
+            'type': 'temperature',
+        })
+        return data
 
 
 class DriverI2C(object):
@@ -549,6 +614,7 @@ class Controller(object):
         self._bus = {}
         self.initialize_motor()
         self.initialize_sfp()
+        self.initialize_1wire()
 
         # Annouce that we have initialized.
         self.ipc.publish_event(
@@ -593,6 +659,20 @@ class Controller(object):
         except DeviceNotFound:
             pass
 
+    def initialize_1wire(self):
+        """
+        Initializes the 1wire drivers.
+        """
+
+        self.onewire = []
+        for device in os.listdir('/sys/bus/w1/devices'):
+            try:
+                if device.startswith('28-'):
+                    # Temperature sensor.
+                    self.onewire.append(TemperatureSensor(self, device))
+            except DeviceNotFound:
+                continue
+
     def get_status(self):
         """
         Returns the current status of all attached drivers.
@@ -602,6 +682,7 @@ class Controller(object):
             'uuid': str(self._uuid),
             'motor': self.motor.serialize() if self.motor else None,
             'sfp': [sfp.serialize() for sfp in self.sfp],
+            '1wire': [device.serialize() for device in self.onewire],
         }
 
     def read_sfp(self):
@@ -646,6 +727,33 @@ class Controller(object):
             'metadata': self.motor.serialize(),
         })
 
+    def read_1wire(self):
+        """
+        Reads and publishes 1wire data.
+        """
+
+        if not self.onewire:
+            return
+
+        # Read data from 1wire devices.
+        devices = {}
+        for device in self.onewire:
+            data = device.read()
+            if not data:
+                continue
+
+            devices[device.device_id] = data
+
+        if not devices:
+            return
+
+        # Publish 1wire device state.
+        self.ipc.publish(IPC.TOPIC_STATUS, {
+            'type': IPC.TYPE_1WIRE,
+            'devices': devices,
+            'metadata': [device.serialize() for device in self.onewire],
+        })
+
     def start(self):
         """
         Starts the control loop.
@@ -653,6 +761,26 @@ class Controller(object):
 
         last_read = 0
         last_watchdog_event = 0
+
+        # 1wire processing must happen in a separate thread as it is slow.
+        def worker_1wire():
+            last_read = 0
+
+            while True:
+                now = time.time()
+
+                if not self.onewire:
+                    self.initialize_1wire()
+
+                if now - last_read > 15:
+                    self.read_1wire()
+                    last_read = now
+
+                time.sleep(1)
+
+        thread_1wire = threading.Thread(target=worker_1wire, name='1wire')
+        thread_1wire.daemon = True
+        thread_1wire.start()
 
         while True:
             self.ipc.poll()

@@ -72,6 +72,9 @@ REPORT_SENSOR_DATA = {
         'tx_bias_ma': {'name': "SFP (%(serial)s) TX Bias", 'unit': "mA", 'aggregation': average},
         'tx_power_mw': {'name': "SFP (%(serial)s) TX Power", 'unit': "mW", 'aggregation': average},
         'vcc_v': {'name': "SFP (%(serial)s) VCC", 'unit': "V", 'aggregation': average},
+    },
+    '1wire': {
+        'temperature_c': {'name': "1wire (%(device_id)s) Temperature", 'unit': "C", 'aggregation': average},
     }
 }
 # Snapshot interval (in seconds) and number of snapshots to keep for aggregation.
@@ -187,6 +190,19 @@ while True:
                         points.append(sfp[source_key])
                         if len(points) > SNAPSHOT_COUNT:
                             points.pop(0)
+            elif data['type'] == '1wire':
+                for device_id, device in data['devices'].items():
+                    device_state = state.setdefault(device_id, {})
+
+                    for key, descriptor in REPORT_SENSOR_DATA[data['type']].items():
+                        source_key = descriptor.get('source', key)
+                        if source_key not in device:
+                            continue
+
+                        points = device_state.setdefault(key, [])
+                        points.append(device[source_key])
+                        if len(points) > SNAPSHOT_COUNT:
+                            points.pop(0)
 
     # Push data to nodewatcher.
     if now - last_push > NODEWATCHER_PUSH_INTERVAL:
@@ -222,6 +238,16 @@ while True:
                 descriptor = REPORT_SENSOR_DATA['sfp'][key]
                 feed['sensors.generic']['sfp-%s-%s' % (serial, key)] = {
                     'name': descriptor['name'] % {'serial': serial},
+                    'unit': descriptor['unit'],
+                    'value': float(descriptor['aggregation'](points)),
+                }
+
+        # 1wire devices.
+        for device_id, device in current_state.get('1wire', {}).items():
+            for key, points in device.items():
+                descriptor = REPORT_SENSOR_DATA['1wire'][key]
+                feed['sensors.generic']['1wire-%s-%s' % (device_id, key)] = {
+                    'name': descriptor['name'] % {'device_id': device_id},
                     'unit': descriptor['unit'],
                     'value': float(descriptor['aggregation'](points)),
                 }
