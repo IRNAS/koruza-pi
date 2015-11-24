@@ -16,7 +16,7 @@ with open('/boot/config.txt', 'r+') as boot_cfg:
 
     append_config(boot_cfg, 'dtparam=i2c_arm=on', existing_configuration)
     append_config(boot_cfg, 'dtparam=spi=on', existing_configuration)
-    append_config(boot_cfg, 'dtoverlay=w1-gpio', existing_configuration)
+    append_config(boot_cfg, 'dtoverlay=w1-gpio,gpiopin=26', existing_configuration)
 
 # Setup modules.
 print "Updating modules."
