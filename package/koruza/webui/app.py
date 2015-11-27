@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 import flask
 import flask_webpack
 import gevent
@@ -25,55 +28,93 @@ class Client(object):
         self._command_bus = command_bus
         self._socket = socket
         self._authenticated = False
+        self._active = False
 
-    def start(self):
+        self._send_queue_processor = None
+        self._send_queue = []
+
+    def is_active(self):
+        return self._active
+
+    def send_queue(self, data):
+        if not self._active:
+            return
+
+        self._send_queue.append(data)
+        if self._send_queue_processor is None:
+            self._send_queue_processor = gevent.spawn(self._process_send_queue)
+
+    def _process_send_queue(self):
         while True:
             try:
-                message = self._socket.receive()
-                if not message:
-                    break
+                self._socket.send(self._send_queue.pop(0))
+            except IndexError:
+                break
+            except geventwebsocket.WebSocketError:
+                self._send_queue = []
+                self._active = False
+                break
 
+        self._send_queue_processor = None
+
+    def start(self):
+        self._active = True
+        try:
+            while True:
                 try:
-                    request = json.loads(message)
-                    if request['type'] != Client.TYPE_COMMAND:
-                        self.reply_error(Client.ERROR_BAD_REQUEST, "Clients may only send commands.")
-                        continue
+                    message = self._socket.receive()
+                    if not message:
+                        break
 
-                    command = request['command']
-                except (ValueError, KeyError):
-                    self.reply_error(Client.ERROR_BAD_REQUEST, "Malformed request.")
-                    continue
-
-                if command == 'authenticate':
-                    # Authentication request.
                     try:
-                        username = request['username']
-                        password = request['password']
-                    except KeyError:
+                        request = json.loads(message)
+                        if request['type'] != Client.TYPE_COMMAND:
+                            self.reply_error(Client.ERROR_BAD_REQUEST, "Clients may only send commands.")
+                            continue
+
+                        command = request['command']
+                    except (ValueError, KeyError):
                         self.reply_error(Client.ERROR_BAD_REQUEST, "Malformed request.")
                         continue
 
-                    if self.authenticate(username, password):
-                        self.reply_ok({'authenticated': True})
-                    else:
-                        self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Authentication failed.")
-                elif command == 'deauthenticate':
-                    # Deauthentication request.
-                    if self.deauthenticate():
-                        self.reply_ok({'authenticated': False})
-                    else:
-                        self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Deauthentication failed.")
-                elif command == 'get_status':
-                    # The 'get_status' command is allowed even when the user is not authenticated.
-                    self._relay_command(message)
-                else:
-                    if not self._authenticated:
-                        self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Not authorized.")
-                        continue
+                    if command == 'authenticate':
+                        # Authentication request.
+                        try:
+                            username = request['username']
+                            password = request['password']
+                        except KeyError:
+                            self.reply_error(Client.ERROR_BAD_REQUEST, "Malformed request.")
+                            continue
 
-                    self._relay_command(message)
-            except geventwebsocket.WebSocketError:
-                break
+                        if self.authenticate(username, password):
+                            self.reply_ok({'authenticated': True})
+                        else:
+                            self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Authentication failed.")
+                    elif command == 'deauthenticate':
+                        # Deauthentication request.
+                        if self.deauthenticate():
+                            self.reply_ok({'authenticated': False})
+                        else:
+                            self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Deauthentication failed.")
+                    elif command == 'get_status':
+                        # The 'get_status' command is allowed even when the user is not authenticated.
+                        self._relay_command(message)
+                    else:
+                        if not self._authenticated:
+                            self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Not authorized.")
+                            continue
+
+                        self._relay_command(message)
+                except geventwebsocket.WebSocketError:
+                    break
+        finally:
+            if self._send_queue_processor is not None:
+                processor = self._send_queue_processor
+                self._send_queue_processor = None
+                processor.kill()
+
+            self._send_queue = []
+            self._active = False
 
     def reply(self, data):
         self._socket.send('command\x00' + json.dumps(data))
@@ -162,7 +203,10 @@ def websocket():
     try:
         client.start()
     finally:
-        clients.remove(client)
+        try:
+            clients.remove(client)
+        except ValueError:
+            pass
 
 
 def router(publisher):
@@ -180,10 +224,7 @@ def router(publisher):
                 continue
 
             for client in clients[:]:
-                try:
-                    client.send_raw(data)
-                except geventwebsocket.WebSocketError:
-                    clients.remove(client)
+                client.send_queue(data)
 
 if __name__ == '__main__':
     publisher = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
