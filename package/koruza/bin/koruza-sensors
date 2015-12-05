@@ -675,11 +675,13 @@ class Controller(object):
 
     def get_status(self):
         """
-        Returns the current status of all attached drivers.
+        Returns the current status of all attached drivers together with
+        general unit information and its configuration.
         """
 
         return {
             'uuid': str(self._uuid),
+            'config': self.config,
             'motor': self.motor.serialize() if self.motor else None,
             'sfp': [sfp.serialize() for sfp in self.sfp],
             '1wire': [device.serialize() for device in self.onewire],

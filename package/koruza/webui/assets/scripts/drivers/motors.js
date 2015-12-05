@@ -21,6 +21,9 @@ class MotorController extends React.Component {
         this.state = {
             controlEnabled: false,
             steps: 1,
+            maxX: 70000,
+            maxY: 70000,
+            maxF: 20000,
             nextX: this.props.readings.next_x,
             nextY: this.props.readings.next_y,
             nextF: this.props.readings.next_f,
@@ -61,15 +64,15 @@ class MotorController extends React.Component {
             // A.
             65: (state) => { state.nextX = Math.max(0, state.nextX - steps); },
             // D.
-            68: (state) => { state.nextX = Math.min(70000, state.nextX + steps); },
+            68: (state) => { state.nextX = Math.min(this.state.maxX, state.nextX + steps); },
             // S.
             83: (state) => { state.nextY = Math.max(0, state.nextY - steps); },
             // W.
-            87: (state) => { state.nextY = Math.min(70000, state.nextY + steps); },
+            87: (state) => { state.nextY = Math.min(this.state.maxY, state.nextY + steps); },
             // V.
             86: (state) => { state.nextF = Math.max(0, state.nextF - steps); },
             // F.
-            70: (state) => { state.nextF = Math.min(20000, state.nextF + steps); },
+            70: (state) => { state.nextF = Math.min(this.state.maxF, state.nextF + steps); },
         }
         if (!keymap[event.keyCode])
             return;
@@ -147,6 +150,16 @@ class MotorController extends React.Component {
             }
         });
         this.refs.snackbarStopScan.show();
+    }
+
+    componentWillMount() {
+        Bus.command('get_status', {}, (status) => {
+            this.setState({
+                maxX: status.config.motor_max_x,
+                maxY: status.config.motor_max_y,
+                maxF: status.config.motor_max_f,
+            });
+        });
     }
 
     componentDidMount() {
