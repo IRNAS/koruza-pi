@@ -1,3 +1,7 @@
+This is a KORUZA package for Raspberry Pi (user interface, measurements data collection, controller).
+------------
+
+
 Installation
 ------------
 
