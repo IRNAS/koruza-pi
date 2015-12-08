@@ -18,7 +18,11 @@ update-rc.d watchdog remove
 /etc/init.d/watchdog stop
 sv stop ${UPGRADE_SERVICES}
 
+cp /koruza/config/koruza.conf /tmp/koruza.conf
+
 tar -xf ${UPGRADE_PACKAGE} -C /
+
+mv /tmp/koruza.conf /koruza/config/koruza.conf
 
 /koruza/install-packages
 /koruza/install-config

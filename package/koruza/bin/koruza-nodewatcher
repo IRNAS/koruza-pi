@@ -223,6 +223,37 @@ while True:
             }
         }
 
+        # Data measurements.
+        try:
+            command_bus.send(json.dumps({'type': 'command', 'command': 'get_status'}))
+            node_config = json.loads(command_bus.recv())['config']
+
+            data_measurement_host = node_config['data_measurement_host']
+            measurements = requests.get('http://%s/cgi-bin/koruza/netmeasured_get' % data_measurement_host).json()
+            feed['sensors.generic']['netmeasured-loss'] = {
+                'name': "Network Measurement - Packet Loss",
+                'unit': '%',
+                'value': float(measurements['koruza']['loss_percent']),
+            }
+
+            feed['sensors.generic']['netmeasured-sent'] = {
+                'name': "Network Measurement - Sent Packets",
+                'unit': '',
+                'value': float(measurements['koruza']['sent']),
+            }
+
+            feed['sensors.generic']['netmeasured-rcvd'] = {
+                'name': "Network Measurement - Received Packets",
+                'unit': '',
+                'value': float(measurements['koruza']['rcvd']),
+            }
+
+            requests.get('http://%s/cgi-bin/koruza/netmeasured_reset' % data_measurement_host)
+        except KeyError:
+            pass
+        except (requests.HTTPError, requests.ConnectionError, ValueError):
+            print "WARNING: Failed to fetch data measurements from %(data_measurement_host)s." % node_config
+
         # Motors.
         for key, points in current_state.get('motors', {}).items():
             descriptor = REPORT_SENSOR_DATA['motors'][key]
