@@ -37,8 +37,6 @@ class MotorController extends React.Component {
         this._onHomeXClicked = this._onHomeXClicked.bind(this);
         this._onHomeYClicked = this._onHomeYClicked.bind(this);
         this._onStopClicked = this._onStopClicked.bind(this);
-        this._onStartScanClicked = this._onStartScanClicked.bind(this);
-        this._onStopScanClicked = this._onStopScanClicked.bind(this);
     }
 
     _onControlEnabledToggled(event, toggled) {
@@ -123,35 +121,6 @@ class MotorController extends React.Component {
         this.refs.snackbarStop.show();
     }
 
-    _onStartScanClicked() {
-        let steps = parseInt(this.refs.scanSteps.getValue());
-        let threshold = parseInt(this.refs.scanThreshold.getValue());
-        if (isNaN(steps) || isNaN(threshold))
-            return;
-
-        Bus.command('call_application', {
-            'application_id': 'spiral_scan',
-            'payload': {
-                'type': 'command',
-                'command': 'start',
-                'step': steps,
-                'threshold': threshold,
-            }
-        });
-        this.refs.snackbarStartScan.show();
-    }
-
-    _onStopScanClicked() {
-        Bus.command('call_application', {
-            'application_id': 'spiral_scan',
-            'payload': {
-                'type': 'command',
-                'command': 'stop',
-            }
-        });
-        this.refs.snackbarStopScan.show();
-    }
-
     componentWillMount() {
         Bus.command('get_status', {}, (status) => {
             this.setState({
@@ -226,20 +195,6 @@ class MotorController extends React.Component {
                     style={styles.snackbar}
                 />
 
-                <Snackbar
-                    ref="snackbarStartScan"
-                    message="Requested to start scan."
-                    autoHideDuration={1000}
-                    style={styles.snackbar}
-                />
-
-                <Snackbar
-                    ref="snackbarStopScan"
-                    message="Requested to stop scan."
-                    autoHideDuration={1000}
-                    style={styles.snackbar}
-                />
-
                 <div className="row">
                     <div className="col-md-6">
                         <Toggle
@@ -286,28 +241,6 @@ class MotorController extends React.Component {
                             onTouchTap={this._onStopClicked}
                         />
                         <br/><br/>
-
-                        <TextField
-                            ref="scanSteps"
-                            floatingLabelText="Scan steps"
-                            defaultValue={100}
-                        />
-                        <TextField
-                            ref="scanThreshold"
-                            floatingLabelText="Scan threshold"
-                            defaultValue={10}
-                        />
-                        <br/><br/>
-
-                        <RaisedButton
-                            label="Start scan"
-                            onTouchTap={this._onStartScanClicked}
-                        />
-                        &nbsp;
-                        <RaisedButton
-                            label="Stop scan"
-                            onTouchTap={this._onStopScanClicked}
-                        />
                     </div>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 {
   "scripts": {
     "start": "node_modules/.bin/webpack-dev-server --progress --colors --port 9000 --content-base build/public",
-    "build": "rm -rf build/public/* && NODE_ENV=production node_modules/.bin/webpack -p --progress --colors"
+    "build": "rm -rf build/public/*.js && NODE_ENV=production node_modules/.bin/webpack -p --progress --colors"
   },
   "dependencies": {
     "react": "^0.14.0",

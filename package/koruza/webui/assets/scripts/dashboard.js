@@ -9,6 +9,11 @@ import AppCanvas from 'material-ui/lib/app-canvas';
 import LeftNav from 'material-ui/lib/left-nav';
 import ClearFix from 'material-ui/lib/clearfix';
 import RaisedButton from 'material-ui/lib/raised-button';
+import EnhancedButton from 'material-ui/lib/enhanced-button';
+import Paper from 'material-ui/lib/paper';
+import {Tab, Tabs} from 'material-ui/lib/tabs';
+
+const {Colors, Spacing, Typography} = Styles;
 
 import injectTapEventPlugin from 'react-tap-event-plugin';
 
@@ -17,6 +22,7 @@ import StatusMotors from './drivers/motors';
 import StatusSFP from './drivers/sfp';
 import StatusGraph from './graph';
 import UnitInformation from './info';
+import Algorithms from './algorithms';
 import LoginDialog from './login';
 
 class Status extends React.Component {
@@ -26,9 +32,10 @@ class Status extends React.Component {
                 <h2>Status</h2>
 
                 <UnitInformation /><br/>
-                <StatusGraph /><br/>
-                <StatusMotors /><br/>
                 <StatusSFP /><br/>
+                <StatusMotors /><br/>
+                <StatusGraph /><br/>
+                <Algorithms /><br/>
             </ClearFix>
         );
     }
@@ -50,11 +57,6 @@ class Dashboard extends React.Component {
     constructor() {
         super();
 
-        this.menuItems = [
-            { route: '/status', text: 'Status' },
-            { route: '/about', text: 'About' },
-        ];
-
         this.state = {
             authenticated: Bus.isAuthenticated(),
         }
@@ -62,27 +64,24 @@ class Dashboard extends React.Component {
         this._onAuthenticated = this._onAuthenticated.bind(this);
         this._onLoginClicked = this._onLoginClicked.bind(this);
         this._onLogoutClicked = this._onLogoutClicked.bind(this);
+        this._onNavigationChanged = this._onNavigationChanged.bind(this);
     }
 
     _getSelectedIndex() {
-        let currentItem;
-        let history = this.props.history;
-
-        for (let i = this.menuItems.length - 1; i >= 0; i--) {
-            currentItem = this.menuItems[i];
-            if (currentItem.route && history.isActive(currentItem.route)) {
-                return i;
-            }
-        }
+        return this.props.history.isActive('/status') ? '1' :
+                this.props.history.isActive('/about') ? '2' : '1';
     }
 
-    _onNavigationChanged(event, key, payload) {
-        this.props.history.pushState(null, payload.route);
+    _onNavigationChanged(value, event, tab) {
+        this.props.history.pushState(null, tab.props.route);
+        this.setState({tabIndex: this._getSelectedIndex()});
     }
 
     componentWillMount() {
         // Listen for authentication events.
         Bus.addAuthenticationListener(this._onAuthenticated);
+
+        this.setState({tabIndex: this._getSelectedIndex()});
     }
 
     _onAuthenticated() {
@@ -103,14 +102,53 @@ class Dashboard extends React.Component {
         Bus.deauthenticate();
     }
 
+
     render() {
         let styles = {
-            content: {
-                marginLeft: '270px',
+            root: {
+                backgroundColor: Colors.grey900,
+                position: 'fixed',
+                height: 64,
+                top: 0,
+                right: 0,
+                zIndex: 15,
+                width: '100%',
+            },
+            container: {
+                position: 'absolute',
+                right: (Spacing.desktopGutter / 2) + 48,
+                bottom: 0,
+            },
+            span: {
+                color: Colors.white,
+                fontWeight: Typography.fontWeightLight,
+                left: 135,
+                top: 22,
+                position: 'absolute',
+                fontSize: 26,
+            },
+            logoContainer: {
+                position: 'fixed',
+                width: 300,
+                left: Spacing.desktopGutter,
+            },
+            logo: {
+                width: 115,
+                backgroundColor: Colors.grey900,
+                position: 'absolute',
+                top: 8,
+            },
+            tabs: {
+                width: 425,
+                bottom: 0,
+            },
+            tab: {
+                height: 64,
+                backgroundColor: Colors.grey900,
             },
             login: {
                 float: 'right',
-            }
+            },
         };
 
         let loginLogout;
@@ -137,18 +175,48 @@ class Dashboard extends React.Component {
 
         return (
             <AppCanvas>
-                <div style={styles.content}>
+                <div>
+                    <br/><br/><br/><br/>
                     <div style={styles.login}>
                         {loginLogout}
                     </div>
 
                     {this.props.children}
                 </div>
-                <LeftNav
-                    menuItems={this.menuItems}
-                    selectedIndex={this._getSelectedIndex()}
-                    onChange={this._onNavigationChanged.bind(this)}
-                />
+                <div>
+                    <Paper
+                        zDepth={0}
+                        rounded={false}
+                        style={styles.root}
+                    >
+                        <EnhancedButton
+                            style={styles.logoContainer}
+                            linkButton={true}
+                            href="/#/status"
+                        >
+                            <img style={styles.logo} src="/public/logo.png" />
+                            <span style={styles.span}>Controller</span>
+                        </EnhancedButton>
+                        <div style={styles.container}>
+                            <Tabs
+                                style={styles.tabs}
+                                value={this.state.tabIndex}
+                                onChange={this._onNavigationChanged}
+                            >
+                                <Tab
+                                    value="1"
+                                    label="STATUS"
+                                    style={styles.tab}
+                                    route="/status" />
+                                <Tab
+                                    value="2"
+                                    label="ABOUT"
+                                    style={styles.tab}
+                                    route="/about"/>
+                            </Tabs>
+                        </div>
+                    </Paper>
+                </div>
             </AppCanvas>
         );
     }
