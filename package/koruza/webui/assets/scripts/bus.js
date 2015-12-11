@@ -119,7 +119,9 @@ class Bus {
     }
 
     _messageReceived(event) {
-        let [topic, data] = event.data.split('\x00');
+        let topicSeparatorIndex = event.data.indexOf('@');
+        let topic = event.data.substr(0, topicSeparatorIndex);
+        let data = event.data.substr(topicSeparatorIndex + 1);
         if (topic == 'command') {
             if (!this._commandQueue.length)
                 return;

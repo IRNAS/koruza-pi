@@ -184,7 +184,7 @@ class IPC(object):
         })
 
     def publish(self, topic, data):
-        msg = '%s\x00%s' % (topic, json.dumps(data))
+        msg = '%s@%s' % (topic, json.dumps(data))
 
         # Publish the message to local and remote receivers.
         self._publish.send(msg)

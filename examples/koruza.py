@@ -46,7 +46,7 @@ class Application(object):
             # Check for incoming updates, block for at most 100 ms.
             fds = poll.poll(100)
             if fds:
-                topic, payload = publish.recv().split('\x00')
+                topic, payload = publish.recv().split('@', 1)
                 try:
                     data = json.loads(payload)
                 except ValueError:

@@ -117,7 +117,7 @@ class Client(object):
             self._active = False
 
     def reply(self, data):
-        self._socket.send('command\x00' + json.dumps(data))
+        self._socket.send('command@' + json.dumps(data))
 
     def reply_ok(self, data):
         msg = {
@@ -167,7 +167,7 @@ class Client(object):
         # Wait for a response and dispatch it via the web socket.
         rl, wl, xl = select.select([rfd], [], [])
         data = self._command_bus.recv()
-        self._socket.send('command\x00' + data)
+        self._socket.send('command@' + data)
 
     def send_raw(self, data):
         self._socket.send(data)

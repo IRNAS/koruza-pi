@@ -61,7 +61,7 @@ while True:
     # Check for incoming updates.
     fds = poll.poll(100)
     if fds:
-        topic, payload = ipc.recv().split('\x00')
+        topic, payload = ipc.recv().split('@', 1)
         data = json.loads(payload)
         if data['type'] == 'motors':
             status_x = data['motor']['status_x']

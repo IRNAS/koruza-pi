@@ -158,7 +158,7 @@ while True:
     # Check for incoming updates.
     fds = poll.poll(10)
     if fds:
-        topic, payload = ipc.recv().split('\x00')
+        topic, payload = ipc.recv().split('@', 1)
         data = json.loads(payload)
 
         last_update = last_state_update.get(data['type'], 0)
