@@ -54,10 +54,17 @@ status_y = 0
 status_f = 0
 rx_power = 0
 led_status = GPIO.HIGH
+
 last_led_toggle = time.time()
 last_watchdog = time.time()
 
+last_sfp_watchdog = time.time()
+last_sfp_update = None
+last_motors_update = None
+
 while True:
+    now = time.time()
+
     # Check for incoming updates.
     fds = poll.poll(100)
     if fds:
@@ -67,11 +74,30 @@ while True:
             status_x = data['motor']['status_x']
             status_y = data['motor']['status_y']
             status_f = data['motor']['status_f']
+            last_motors_update = now
         elif data['type'] == 'sfp':
             # TODO: Properly support multiple SFP modules.
             rx_power = data['sfp'].values()[0]['rx_power_mw']
+            last_sfp_update = now
         elif data['type'] == 'watchdog':
-            last_watchdog = time.time()
+            last_watchdog = now
+
+    # Cycle power in case there has been no SFP/motor updates.
+    def is_timeout(last_update, timeout=10):
+        try:
+            if now - last_update > timeout:
+                return True
+        except TypeError:
+            pass
+
+        return False
+
+    if (is_timeout(last_sfp_update) or is_timeout(last_motors_update)) and is_timeout(last_sfp_watchdog, 60):
+        print "WARNING: SFP/motor watchdog triggered, cycling PIN_SW_SFP_OUTPUT."
+        GPIO.output(PIN_SW_SFP_OUTPUT, GPIO.LOW)
+        time.sleep(1)
+        GPIO.output(PIN_SW_SFP_OUTPUT, GPIO.HIGH)
+        last_sfp_watchdog = now
 
     # Update GPIOs.
     if status_x == 1 or status_y == 1 or status_f == 1:
@@ -85,7 +111,6 @@ while True:
         GPIO.output(PIN_LED_LINK, GPIO.LOW)
 
     # Toggle status LED.
-    now = time.time()
     if now - last_watchdog > 70:
         led_status = GPIO.HIGH
         GPIO.output(PIN_LED_STATUS, GPIO.HIGH)
