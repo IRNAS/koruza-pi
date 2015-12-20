@@ -46,6 +46,7 @@ class IPC(object):
     COMMAND_MOTOR_MOVE = 'motor_move'
     COMMAND_MOTOR_CONFIG = 'motor_configure'
     COMMAND_CALL_APPLICATION = 'call_application'
+    COMMAND_SET_CONFIG = 'set_config'
 
     # Error codes (reused from HTTP).
     ERROR_BAD_REQUEST = 400
@@ -98,6 +99,13 @@ class IPC(object):
             command = data['command']
             if command == IPC.COMMAND_GET_STATUS:
                 # Returns general KORUZA controller status.
+                return self.reply_ok(self._controller.get_status())
+            elif command == IPC.COMMAND_SET_CONFIG:
+                try:
+                    self._controller.set_config(data['config'])
+                except KeyError:
+                    return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing arguments.")
+
                 return self.reply_ok(self._controller.get_status())
             elif command == IPC.COMMAND_MOTOR_MOVE:
                 # Instructs the motors to move to a specific position.
@@ -686,6 +694,20 @@ class Controller(object):
             'sfp': [sfp.serialize() for sfp in self.sfp],
             '1wire': [device.serialize() for device in self.onewire],
         }
+
+    def set_config(self, config):
+        """
+        Updates configuration.
+
+        :param config: Configuration to merge into current version
+        """
+
+        # Merge configuration.
+        for key, value in config.iteritems():
+            self.config[key] = value
+
+        with open(CONFIG_FILE, 'w') as config_file:
+            json.dump(self.config, config_file)
 
     def read_sfp(self):
         """

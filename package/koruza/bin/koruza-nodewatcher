@@ -227,6 +227,7 @@ while True:
         try:
             command_bus.send(json.dumps({'type': 'command', 'command': 'get_status'}))
             node_config = json.loads(command_bus.recv())['config']
+            feed['koruza.vpn']['name'] = node_config.get('name', '')
 
             data_measurement_host = node_config['data_measurement_host']
             measurements = requests.get('http://%s/cgi-bin/koruza/netmeasured_get' % data_measurement_host).json()

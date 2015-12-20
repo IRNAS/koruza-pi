@@ -24,8 +24,9 @@ import StatusGraph from './graph';
 import UnitInformation from './info';
 import Algorithms from './algorithms';
 import LoginDialog from './login';
+import SettingsPage from './settings';
 
-class Status extends React.Component {
+class StatusPage extends React.Component {
     render() {
         return (
             <ClearFix>
@@ -41,7 +42,7 @@ class Status extends React.Component {
     }
 }
 
-class About extends React.Component {
+class AboutPage extends React.Component {
     render() {
         return (
             <ClearFix>
@@ -69,7 +70,8 @@ class Dashboard extends React.Component {
 
     _getSelectedIndex() {
         return this.props.history.isActive('/status') ? '1' :
-                this.props.history.isActive('/about') ? '2' : '1';
+                this.props.history.isActive('/settings') ? '2' :
+                this.props.history.isActive('/about') ? '3' : '1';
     }
 
     _onNavigationChanged(value, event, tab) {
@@ -210,6 +212,11 @@ class Dashboard extends React.Component {
                                     route="/status" />
                                 <Tab
                                     value="2"
+                                    label="SETTINGS"
+                                    style={styles.tab}
+                                    route="/settings" />
+                                <Tab
+                                    value="3"
                                     label="ABOUT"
                                     style={styles.tab}
                                     route="/about"/>
@@ -225,10 +232,11 @@ class Dashboard extends React.Component {
 // Route configuration.
 const AppRoutes = (
     <Route path="/" component={Dashboard}>
-        <Route path="status" component={Status} />
-        <Route path="about" component={About} />
+        <Route path="status" component={StatusPage} />
+        <Route path="settings" component={SettingsPage} />
+        <Route path="about" component={AboutPage} />
 
-        <IndexRoute component={Status}/>
+        <IndexRoute component={StatusPage}/>
     </Route>
 );
 

@@ -11,17 +11,25 @@ export default class UnitInformation extends React.Component {
         super(props);
 
         this.state = {
-            uuid: null
+            uuid: null,
+            unitName: null,
         }
     }
 
     componentWillMount() {
         Bus.command('get_status', {}, (status) => {
-            this.setState({uuid: status.uuid});
+            this.setState({
+                uuid: status.uuid,
+                unitName: status.config.name,
+            });
         });
     }
 
     render() {
+        let unitName = this.state.unitName;
+        if (!unitName)
+            unitName = '(not configured)'
+
         return (
             <Card>
                 <CardHeader
@@ -31,7 +39,8 @@ export default class UnitInformation extends React.Component {
                 />
 
                 <CardText>
-                    UUID: {this.state.uuid}
+                    UUID: {this.state.uuid}<br/>
+                    Name: {unitName}
                 </CardText>
             </Card>
         )
