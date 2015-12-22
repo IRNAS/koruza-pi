@@ -13,6 +13,7 @@ import os
 import threading
 import socket
 import fcntl
+import requests
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 
@@ -34,6 +35,7 @@ class IPC(object):
     TYPE_MOTORS = 'motors'
     TYPE_SFP = 'sfp'
     TYPE_1WIRE = '1wire'
+    TYPE_NETMEASURE = 'netmeasure'
     TYPE_COMMAND = 'command'
     TYPE_COMMAND_REPLY = 'cmd_reply'
     TYPE_COMMAND_ERROR = 'cmd_error'
@@ -792,17 +794,36 @@ class Controller(object):
             'metadata': [device.serialize() for device in self.onewire],
         })
 
+    def read_network_measurements(self):
+        """
+        Reads and publishes network measurement data.
+        """
+
+        data_measurement_host = self.config.get('data_measurement_host', None)
+        if not data_measurement_host:
+            return
+
+        try:
+            measurements = requests.get('http://%s/cgi-bin/koruza/netmeasured_get' % data_measurement_host).json()
+
+            self.ipc.publish(IPC.TOPIC_STATUS, {
+                'type': IPC.TYPE_NETMEASURE,
+                'packet_loss': float(measurements['koruza']['loss_percent']),
+                'packets_sent': int(measurements['koruza']['sent']),
+                'packets_rcvd': int(measurements['koruza']['rcvd']),
+            })
+        except (requests.HTTPError, requests.ConnectionError, ValueError, KeyError):
+            self.ipc.publish_error("Failed to read network measurements from '%s'." % data_measurement_host)
+
     def start(self):
         """
         Starts the control loop.
         """
 
-        last_read = 0
-        last_watchdog_event = 0
-
-        # 1wire processing must happen in a separate thread as it is slow.
-        def worker_1wire():
-            last_read = 0
+        # Some processing must happen in a separate thread as it is slow.
+        def worker_process():
+            last_read_1wire = 0
+            last_read_netmeasure = 0
 
             while True:
                 now = time.time()
@@ -810,15 +831,22 @@ class Controller(object):
                 if not self.onewire:
                     self.initialize_1wire()
 
-                if now - last_read > 15:
+                if now - last_read_1wire > 15:
                     self.read_1wire()
-                    last_read = now
+                    last_read_1wire = now
+
+                if now - last_read_netmeasure > 3:
+                    self.read_network_measurements()
+                    last_read_netmeasure = now
 
                 time.sleep(1)
 
-        thread_1wire = threading.Thread(target=worker_1wire, name='1wire')
-        thread_1wire.daemon = True
-        thread_1wire.start()
+        thread_process = threading.Thread(target=worker_process, name='processing')
+        thread_process.daemon = True
+        thread_process.start()
+
+        last_read = 0
+        last_watchdog_event = 0
 
         while True:
             self.ipc.poll()
