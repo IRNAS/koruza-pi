@@ -7,6 +7,9 @@ class SpiralScan(koruza.Application):
     # This is the application identifier so that messages may be directed to
     # this specific application on the bus.
     application_id = 'spiral_scan'
+    # Should be true if the application would like to access the remote unit.
+    needs_remote = True
+
     # Current state.
     state = 'idle'
     # Initial position.
@@ -21,7 +24,7 @@ class SpiralScan(koruza.Application):
     step = 100 # Step for scanning, can be updated from GUI when in idle state
     threshold = 10 # Threshold for auto stop, can be updated from GUI anytime
 
-    def on_command(self, bus, command, state):
+    def on_command(self, bus, command, state, remote_state):
         if command['command'] == 'start' and self.state == 'idle':
             self.state = 'go'
             self.initial_position = state.get('motors', {}).get('motor')
@@ -41,7 +44,7 @@ class SpiralScan(koruza.Application):
             print 'got stop command'
             self.state = 'idle'
 
-    def on_idle(self, bus, state):
+    def on_idle(self, bus, state, remote_state):
         if self.state == 'go':
             if not state.get('sfp') or not state.get('motors'):
                 # Do nothing until we have known last state from SFP and motor drivers.

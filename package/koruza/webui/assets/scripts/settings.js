@@ -26,6 +26,7 @@ export default class SettingsPage extends React.Component {
             {key: 'motor_max_x', name: 'Motor Max X'},
             {key: 'motor_max_y', name: 'Motor Max Y'},
             {key: 'motor_max_f', name: 'Motor Max F'},
+            {key: 'remote_ip', name: 'Remote Unit IP'},
             {key: 'data_measurement_host', name: 'Network Measurement Host'},
         ]
 
