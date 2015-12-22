@@ -14,6 +14,7 @@ export default class UnitInformation extends React.Component {
             uuid: null,
             unitName: null,
             ipAddress: null,
+            netmeasure: null,
         }
     }
 
@@ -25,15 +26,36 @@ export default class UnitInformation extends React.Component {
                 unitName: status.config.name,
             });
         });
+
+        this._subscription = Bus.subscribe('status', ['netmeasure'], _.throttle((message) => {
+            this.setState({
+                netmeasure: {
+                    packetLoss: message.packet_loss,
+                    packetsSent: message.packets_sent,
+                    packetsRcvd: message.packets_rcvd,
+                }
+            });
+        }, 300));
+    }
+
+    componentWillUnmount() {
+        this._subscription.stop();
     }
 
     render() {
         let unitName = this.state.unitName;
         if (!unitName)
-            unitName = '(not configured)'
+            unitName = <i>(not configured)</i>
         let ipAddress = this.state.ipAddress;
         if (!ipAddress)
-            ipAddress = '(not configured)'
+            ipAddress = <i>(not configured)</i>
+
+        let packetLoss = null;
+        if (this.state.netmeasure) {
+            packetLoss = this.state.netmeasure.packetLoss + '%'
+        } else {
+            packetLoss = <i>(not reported)</i>
+        }
 
         return (
             <Card>
@@ -46,7 +68,8 @@ export default class UnitInformation extends React.Component {
                 <CardText>
                     UUID: {this.state.uuid}<br/>
                     Name: {unitName}<br/>
-                    IP: {ipAddress}
+                    IP: {ipAddress}<br/>
+                    Reported link packet loss: {packetLoss}
                 </CardText>
             </Card>
         )

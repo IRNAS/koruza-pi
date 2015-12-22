@@ -320,11 +320,9 @@ export default class StatusMotors extends React.Component {
                     title="Motor status"
                     subtitle="Status of motors as reported by the motor driver"
                     avatar={<Avatar>M</Avatar>}
-                    actAsExpander={true}
-                    showExpandableButton={true}
                 />
 
-                <CardText expandable={true}>
+                <CardText>
                     {readings}
                     {controller}
                 </CardText>
