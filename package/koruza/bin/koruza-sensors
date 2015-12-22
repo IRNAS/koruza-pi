@@ -11,6 +11,8 @@ import traceback
 import uuid
 import os
 import threading
+import socket
+import fcntl
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 
@@ -606,6 +608,17 @@ class Controller(object):
             open('/sys/class/net/eth0/address').read().strip().replace(':', '').upper()
         )
 
+        # Get primary IP address.
+        temporary_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self._ip = socket.inet_ntoa(fcntl.ioctl(
+                temporary_socket.fileno(),
+                0x8915,  # SIOCGIFADDR
+                struct.pack('256s', 'eth0')
+            )[20:24])
+        except IOError:
+            self._ip = None
+
         self.ipc = IPC(self)
 
         # Load configuration.
@@ -689,6 +702,7 @@ class Controller(object):
 
         return {
             'uuid': str(self._uuid),
+            'ip': self._ip,
             'config': self.config,
             'motor': self.motor.serialize() if self.motor else None,
             'sfp': [sfp.serialize() for sfp in self.sfp],

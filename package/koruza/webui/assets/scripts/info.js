@@ -13,6 +13,7 @@ export default class UnitInformation extends React.Component {
         this.state = {
             uuid: null,
             unitName: null,
+            ipAddress: null,
         }
     }
 
@@ -20,6 +21,7 @@ export default class UnitInformation extends React.Component {
         Bus.command('get_status', {}, (status) => {
             this.setState({
                 uuid: status.uuid,
+                ipAddress: status.ip,
                 unitName: status.config.name,
             });
         });
@@ -29,6 +31,9 @@ export default class UnitInformation extends React.Component {
         let unitName = this.state.unitName;
         if (!unitName)
             unitName = '(not configured)'
+        let ipAddress = this.state.ipAddress;
+        if (!ipAddress)
+            ipAddress = '(not configured)'
 
         return (
             <Card>
@@ -40,7 +45,8 @@ export default class UnitInformation extends React.Component {
 
                 <CardText>
                     UUID: {this.state.uuid}<br/>
-                    Name: {unitName}
+                    Name: {unitName}<br/>
+                    IP: {ipAddress}
                 </CardText>
             </Card>
         )
