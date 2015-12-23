@@ -609,17 +609,7 @@ class Controller(object):
             uuid.UUID('d52e15af-f8ca-4b1b-b982-c70bb3d1ec4e'),
             open('/sys/class/net/eth0/address').read().strip().replace(':', '').upper()
         )
-
-        # Get primary IP address.
-        temporary_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            self._ip = socket.inet_ntoa(fcntl.ioctl(
-                temporary_socket.fileno(),
-                0x8915,  # SIOCGIFADDR
-                struct.pack('256s', 'eth0')
-            )[20:24])
-        except IOError:
-            self._ip = None
+        self._ip = None
 
         self.ipc = IPC(self)
 
@@ -847,10 +837,23 @@ class Controller(object):
 
         last_read = 0
         last_watchdog_event = 0
+        last_ip_check = 0
 
         while True:
             self.ipc.poll()
             now = time.time()
+
+            # Discover primary IP address.
+            if not self._ip and now - last_ip_check > 30:
+                temporary_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    self._ip = socket.inet_ntoa(fcntl.ioctl(
+                        temporary_socket.fileno(),
+                        0x8915,  # SIOCGIFADDR
+                        struct.pack('256s', 'eth0')
+                    )[20:24])
+                except IOError:
+                    self._ip = None
 
             # Attempt to reinitialize device drivers when not present.
             if not self.motor:
