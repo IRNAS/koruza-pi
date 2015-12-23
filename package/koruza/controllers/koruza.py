@@ -90,6 +90,7 @@ class Application(object):
                 # Request configuration to discover the remote IP.
                 status = command_bus.command('get_status')
                 next_remote_ip = status['config'].get('remote_ip', None)
+                last_remote_ip_check = now
                 if not next_remote_ip or next_remote_ip.startswith('127.') or next_remote_ip == remote_ip:
                     continue
                 else:
