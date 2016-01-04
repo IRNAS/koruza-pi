@@ -61,7 +61,7 @@ class Alignment(koruza.Application):
     def on_idle(self, bus, state, remote_state):
         if self.state == 'setup':
             #time.sleep(0.1)
-            if not state.get('sfp') and not state.get('motors'):
+            if not state.get('sfp') or not state.get('motors'):
                 # Do nothing until we have known last state from SFP and motor drivers.
                 return
             # Get last known state for the first SFP module.
@@ -75,7 +75,7 @@ class Alignment(koruza.Application):
 
         elif self.state == 'go':
             #time.sleep(0.1)
-            if not state.get('sfp') and not state.get('motors') and not remote_state.get('motors'):
+            if not state.get('sfp') or not state.get('motors') or not remote_state.get('motors'):
                 # Do nothing until we have known last state from SFP and motor drivers.
                 return
             # Get last known state for the first SFP module.
@@ -85,7 +85,7 @@ class Alignment(koruza.Application):
             motor_remote = remote_state['motors']['motor']
 
             # Check if motors stopped moving i.e. previous step is finished
-            if motor['current_x'] == self.wanted_x and motor['current_y'] == self.wanted_y and motor_remote['status_x'] == 0 and motor_remote['status_y'] == 0:
+            if motor['current_x'] == self.wanted_x or motor['current_y'] == self.wanted_y or  motor_remote['status_x'] == 0 and motor_remote['status_y'] == 0:
 
                 print 'State: %d, point: %d, line: %d, X: %f, X-next: %f, XX: %f, Y: %f, Y-next: %f, YY: %f, RX: %f, step: %d' % (self.case, self.j, self.i, motor['current_x'], motor['next_x'], self.wanted_x,  motor['current_y'],  motor['next_y'], self.wanted_y, sfp['rx_power_db'], self.step)
                 # STATE 0: initial decision state
@@ -165,6 +165,8 @@ class Alignment(koruza.Application):
                     if sfp['rx_power_db'] > self.max_threshold:
                         self.state == 'idle'
                         print "Done!"
+                        x = 0
+                        y = 0
                     elif self.j == 5:
                         # Reset counter 
                         self.j = 0
