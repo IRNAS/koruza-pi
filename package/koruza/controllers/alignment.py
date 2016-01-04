@@ -32,10 +32,12 @@ class Alignment(koruza.Application):
     best_x = 0
     best_y = 0
     best_rx = 0
+    wanted_x = 0
+    wanted_y = 0
 
     def on_command(self, bus, command, state, remote_state):
         if command['command'] == 'start' and self.state == 'idle':
-            self.state = 'go'
+            self.state = 'setup'
             self.initial_position = state.get('motors', {}).get('motor')
 
             # Initialize variables.
@@ -57,7 +59,7 @@ class Alignment(koruza.Application):
             self.state = 'idle'
 
     def on_idle(self, bus, state, remote_state):
-        if self.state == 'go':
+        if self.state == 'setup':
             #time.sleep(0.1)
             if not state.get('sfp') and not state.get('motors'):
                 # Do nothing until we have known last state from SFP and motor drivers.
@@ -67,10 +69,25 @@ class Alignment(koruza.Application):
             # Get last known motor driver state.
             motor = state['motors']['motor']
 
-            # Check if motors stopped moving i.e. previous step is finished
-            if motor['status_x'] == 0 and motor['status_y'] == 0 and motor['current_x'] == motor['next_x'] and motor['current_y'] == motor['next_y']:
+            self.wanted_x = motor['current_x']
+            self.wanted_y = motor['current_y']
+            self.state = 'go'
 
-                print 'State: %d, Best rx: %f, angle: %f, point: %d, line: %d, X: %f, X-next: %f, Y: %f, Y-next: %f, RX: %f, step: %d' % (self.case, self.best_rx, self.angle, self.j, self.i, motor['current_x'], motor['next_x'], motor['current_y'],  motor['next_y'], sfp['rx_power_db'], self.step)
+        elif self.state == 'go':
+            #time.sleep(0.1)
+            if not state.get('sfp') and not state.get('motors') and not remote_state.get('motors'):
+                # Do nothing until we have known last state from SFP and motor drivers.
+                return
+            # Get last known state for the first SFP module.
+            sfp = state['sfp']['sfp'].values()[0]
+            # Get last known motor driver state.
+            motor = state['motors']['motor']
+            motor_remote = remote_state['motors']['motor']
+
+            # Check if motors stopped moving i.e. previous step is finished
+            if motor['current_x'] == self.wanted_x and motor['current_y'] == self.wanted_y and motor_remote['status_x'] == 0 and motor_remote['status_y'] == 0:
+
+                print 'State: %d, point: %d, line: %d, X: %f, X-next: %f, XX: %f, Y: %f, Y-next: %f, YY: %f, RX: %f, step: %d' % (self.case, self.j, self.i, motor['current_x'], motor['next_x'], self.wanted_x,  motor['current_y'],  motor['next_y'], self.wanted_y, sfp['rx_power_db'], self.step)
                 # STATE 0: initial decision state
                 if self.case == 0:
                     # initialise current position to best position
@@ -99,6 +116,9 @@ class Alignment(koruza.Application):
                     # Calculate next points
                     x = motor['current_x'] + math.cos(self.angle) * self.step
                     y = motor['current_y'] + math.sin(self.angle) * self.step
+                    #Update variables
+                    self.wanted_x = x
+                    self.wanted_y = y
 
                     # Request the motor to move to the next point.
                     bus.command('motor_move', next_x=x, next_y=y)
@@ -176,7 +196,9 @@ class Alignment(koruza.Application):
                         x = motor['current_x'] + math.cos(self.angle) * self.step
                         y = motor['current_y'] + math.sin(self.angle) * self.step
 
-
+                    #Update variables
+                    self.wanted_x = x
+                    self.wanted_y = y
                     # Request the motor to move to the next point.
                     bus.command('motor_move', next_x=x, next_y=y)
                     self.j = self.j + 1 # Increase point count
