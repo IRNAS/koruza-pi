@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import koruza
 import math
-import time
 
 
 class Alignment(koruza.Application):
@@ -23,8 +22,8 @@ class Alignment(koruza.Application):
     j = 0
     # variables updated from GUI
     step = 100 # Step for scanning, can be updated from GUI when in idle state
-    min_threshold = 5 # Threshold for auto stop, can be updated from GUI any time
-    max_threshold = 22 #Stopping condition
+    min_threshold = 0 # Threshold for auto stop, can be updated from GUI any time
+    max_threshold = 25 #Stopping condition
 
     case = 0 # Current state case of the system
 
@@ -85,6 +84,7 @@ class Alignment(koruza.Application):
             motor = state['motors']['motor']
             motor_remote = remote_state['motors']['motor']
 
+            # print 'Remote state x: %d, Remote state y: %d, current x: %f, wanted x: %f, current y: %f, wanted y: %f' % (motor_remote['status_x'], motor_remote['status_y'], motor['current_x'], self.wanted_x, motor['current_y'], self.wanted_y )
             # Check if motors stopped moving i.e. previous step is finished
             if motor['current_x'] == self.wanted_x and motor['current_y'] == self.wanted_y and  motor_remote['status_x'] == 0 and motor_remote['status_y'] == 0:
 
