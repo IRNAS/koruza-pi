@@ -40,6 +40,7 @@ class Application(object):
         publish_fd = publish.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD)
 
         command_bus = Bus()
+        self._command_bus = command_bus
 
         poll = select.poll()
         poll.register(publish_fd, select.POLLIN)
@@ -73,8 +74,11 @@ class Application(object):
 
                 try:
                     if topic == self._topic:
-                        if data['type'] == 'command':
+                        if data['type'] == 'command' and not remote:
                             self.on_command(command_bus, data, last_state, last_remote_state)
+                        elif data['type'] == 'app_status':
+                            state = last_remote_state if remote else last_state
+                            state.setdefault('app_status', {}).update(data['value'])
                     elif topic == 'status':
                         if remote:
                             last_remote_state[data['type']] = data
@@ -109,8 +113,19 @@ class Application(object):
                 remote_publish = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
                 remote_publish.connect('tcp://%s:7100' % str(next_remote_ip))
                 remote_publish.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, 'status')
+                remote_publish.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, self._topic)
                 remote_publish_fd = remote_publish.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD)
                 poll.register(remote_publish_fd, select.POLLIN)
+
+    def publish(self, data):
+        self._command_bus.command(
+            'call_application',
+            application_id=self.application_id,
+            payload={
+                'type': 'app_status',
+                'value': data,
+            }
+        )
 
     def on_idle(self, bus, state, remote_state):
         pass
