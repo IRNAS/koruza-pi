@@ -57,6 +57,8 @@ class Application(object):
         self.config = command_bus.command('get_status')['config']
 
         while True:
+            now = time.time()
+
             # Check for incoming updates, block for at most 100 ms.
             for fd, event in poll.poll(100):
                 if fd == publish_fd:
@@ -79,12 +81,17 @@ class Application(object):
                         elif data['type'] == 'app_status':
                             state = last_remote_state if remote else last_state
                             state.setdefault('app_status', {}).update(data['value'])
+
+                            for key in data['value']:
+                                state.setdefault('_age', {}).setdefault('app_status', {})[key] = now
                     elif topic == 'status':
                         if remote:
                             last_remote_state[data['type']] = data
+                            last_remote_state.setdefault('_age', {})[data['type']] = now
                             self.on_remote_status_update(command_bus, data)
                         else:
                             last_state[data['type']] = data
+                            last_state.setdefault('_age', {})[data['type']] = now
                             self.on_status_update(command_bus, data)
                 except:
                     traceback.print_exc()
@@ -93,7 +100,6 @@ class Application(object):
             self.on_idle(command_bus, last_state, last_remote_state)
 
             # Check for remote IP change.
-            now = time.time()
             if self.needs_remote and now - last_remote_ip_check > 30:
                 # Request configuration to discover the remote IP.
                 status = command_bus.command('get_status')
@@ -126,6 +132,19 @@ class Application(object):
                 'value': data,
             }
         )
+
+    def get_age(self, state, *path):
+        age = state.get('_age', {})
+
+        for atom in path:
+            age = age.get(atom, None)
+            if age is None:
+                return 0
+
+            if isinstance(age, dict):
+                continue
+            else:
+                return time.time() - age
 
     def on_idle(self, bus, state, remote_state):
         pass
