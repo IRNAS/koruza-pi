@@ -6,9 +6,14 @@ if [ ${EUID} -ne 0 ]; then
 fi
 
 UPGRADE_PACKAGE="$1"
+UPGRADE_DIR=/tmp/upgrade-koruza-repo
 if [ -z "${UPGRADE_PACKAGE}" ]; then
-  echo "ERROR: Missing path to upgrade package."
-  exit 1
+  echo "No upgrade package specified, upgrading to latest master."
+  rm -rf "${UPGRADE_DIR}"
+  git clone https://github.com/IRNAS/koruza-pi "${UPGRADE_DIR}"
+  cd "${UPGRADE_DIR}"
+  ./make-package.sh
+  UPGRADE_PACKAGE="${UPGRADE_DIR}/koruza-package.tar.bz2"
 fi
 
 # Do not shutdown the vpn service as otherwise we may lose connectivity.
@@ -28,3 +33,5 @@ mv /tmp/koruza.conf /koruza/config/koruza.conf
 /koruza/install-config
 
 sv start ${UPGRADE_SERVICES}
+
+rm -rf "${UPGRADE_DIR}"

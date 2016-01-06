@@ -2,6 +2,21 @@
 Installation
 ------------
 
+From Git repository
+===================
+
+To install the latest version directly from the repository do the following on
+the Raspberry Pi running KORUZA:
+
+```
+$ git clone https://github.com/IRNAS/koruza-pi
+$ cd koruza-pi
+$ sudo ./install.sh
+```
+
+Manual
+======
+
 First, prepare an installation package from this repository by running:
 
 ```
@@ -28,6 +43,16 @@ run:
 
 ```
 $ sudo /koruza/upgrade koruza-package.tar.bz2
+```
+
+Upgrade to the latest version
+-----------------------------
+
+To upgrade an existing installation to the latest version from the GitHub
+repository, simply run:
+
+```
+$ sudo /koruza/upgrade
 ```
 
 Debugging the KORUZA IPC bus
@@ -85,5 +110,5 @@ All our websites and additional documentation are licensed under [Creative Commo
 
 What this means is that you can use hardware, firmware, software and documentation without paying a royalty and knowing that you'll be able to use your version forever. You are also free to make changes but if you share these changes then you have to do so on the same conditions that you enjoy.
 
-Koruza, GoodEnoughCNC and IRNAS are all names and marks of Institut IRNAS Rače. 
+Koruza, GoodEnoughCNC and IRNAS are all names and marks of Institut IRNAS Rače.
 You may use these names and terms only to attribute the appropriate entity as required by the Open Licences referred to above. You may not use them in any other way and in particular you may not use them to imply endorsement or authorization of any hardware that you design, make or sell.
