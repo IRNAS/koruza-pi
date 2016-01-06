@@ -29,6 +29,7 @@ class Application(object):
 
     def __init__(self):
         self._topic = 'application.%s' % self.application_id
+        self.config = {}
 
     def start(self):
         # Establish IPC connections.
@@ -50,6 +51,9 @@ class Application(object):
         remote_ip = None
         remote_publish = None
         remote_publish_fd = None
+
+        # Get initial configuration.
+        self.config = command_bus.command('get_status')['config']
 
         while True:
             # Check for incoming updates, block for at most 100 ms.
@@ -89,7 +93,8 @@ class Application(object):
             if self.needs_remote and now - last_remote_ip_check > 30:
                 # Request configuration to discover the remote IP.
                 status = command_bus.command('get_status')
-                next_remote_ip = status['config'].get('remote_ip', None)
+                self.config = status['config']
+                next_remote_ip = self.config.get('remote_ip', None)
                 last_remote_ip_check = now
                 if not next_remote_ip or next_remote_ip.startswith('127.') or next_remote_ip == remote_ip:
                     continue

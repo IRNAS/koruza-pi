@@ -16,6 +16,9 @@ import fcntl
 import requests
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
+CONFIG_SCHEMA = {
+    'distance': int,
+}
 
 
 class IPC(object):
@@ -710,7 +713,7 @@ class Controller(object):
 
         # Merge configuration.
         for key, value in config.iteritems():
-            self.config[key] = value
+            self.config[key] = CONFIG_SCHEMA.get(key, lambda x: x)(value)
 
         with open(CONFIG_FILE, 'w') as config_file:
             json.dump(self.config, config_file)
