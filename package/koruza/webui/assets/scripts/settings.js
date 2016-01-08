@@ -3,6 +3,7 @@ import ClearFix from 'material-ui/lib/clearfix';
 import Paper from 'material-ui/lib/paper';
 import TextField from 'material-ui/lib/text-field';
 import RaisedButton from 'material-ui/lib/raised-button';
+import Dialog from 'material-ui/lib/dialog';
 
 import 'flexboxgrid';
 
@@ -33,6 +34,7 @@ export default class SettingsPage extends React.Component {
 
         this._onAuthenticated = this._onAuthenticated.bind(this);
         this._onApplyChangesClicked = this._onApplyChangesClicked.bind(this);
+        this._onRebootClicked = this._onRebootClicked.bind(this);
     }
 
     componentWillMount() {
@@ -63,6 +65,11 @@ export default class SettingsPage extends React.Component {
         Bus.command('set_config', {config: config}, (status) => {
             this.setState({settings: status.config});
         });
+    }
+
+    _onRebootClicked() {
+        this.refs.rebootingDialog.show();
+        Bus.command('reboot', {});
     }
 
     _onOptionChanged(optionKey, event) {
@@ -129,9 +136,23 @@ export default class SettingsPage extends React.Component {
                                 disabled={!this.state.authenticated}
                                 onTouchTap={this._onApplyChangesClicked}
                             />
+                            &nbsp;
+                            <RaisedButton
+                                label="Reboot device"
+                                disabled={!this.state.authenticated}
+                                onTouchTap={this._onRebootClicked}
+                            />
                         </div>
                     </div>
                 </Paper>
+
+                <Dialog
+                    title="Rebooting"
+                    modal={true}
+                    ref="rebootingDialog">
+
+                    Device is rebooting, please wait and reload the page.
+                </Dialog>
             </ClearFix>
         );
     }

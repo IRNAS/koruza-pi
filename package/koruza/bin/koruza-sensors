@@ -54,6 +54,7 @@ class IPC(object):
     COMMAND_MOTOR_CONFIG = 'motor_configure'
     COMMAND_CALL_APPLICATION = 'call_application'
     COMMAND_SET_CONFIG = 'set_config'
+    COMMAND_REBOOT = 'reboot'
 
     # Error codes (reused from HTTP).
     ERROR_BAD_REQUEST = 400
@@ -175,6 +176,9 @@ class IPC(object):
                     return self.reply_ok({'status': 'ok'})
                 except KeyError, key:
                     return self.reply_error(IPC.ERROR_BAD_REQUEST, "Missing argument %s." % key)
+            elif command == IPC.COMMAND_REBOOT:
+                os.system('reboot')
+                return self.reply_ok({'status': 'ok'})
             else:
                 return self.reply_error(IPC.ERROR_NOT_IMPLEMENTED, "Command not implemented.")
         except:
@@ -620,6 +624,8 @@ class Controller(object):
         with open(CONFIG_FILE, 'r') as config_file:
             self.config = json.load(config_file)
 
+        self.update_hostname()
+
         # Check if all the required 1wire kernel modules are loaded and load them.
         loaded_modules = [x.split()[0] for x in open('/proc/modules').read().split('\n') if x]
         if 'w1_therm' not in loaded_modules or 'w1_gpio' not in loaded_modules:
@@ -704,6 +710,14 @@ class Controller(object):
             '1wire': [device.serialize() for device in self.onewire],
         }
 
+    def update_hostname(self):
+        """
+        Updates the unit's hostname from current configuration.
+        """
+
+        with open('/etc/hostname', 'w') as hostname_file:
+            hostname_file.write('%s\n' % self.config.get('name', 'koruza'))
+
     def set_config(self, config):
         """
         Updates configuration.
@@ -717,6 +731,8 @@ class Controller(object):
 
         with open(CONFIG_FILE, 'w') as config_file:
             json.dump(self.config, config_file)
+
+        self.update_hostname()
 
     def read_sfp(self):
         """
