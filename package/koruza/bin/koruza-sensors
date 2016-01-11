@@ -701,6 +701,9 @@ class Controller(object):
         general unit information and its configuration.
         """
 
+        # Ensure that we have an up-to-date IP address.
+        self.update_ip()
+
         return {
             'uuid': str(self._uuid),
             'ip': self._ip,
@@ -717,6 +720,21 @@ class Controller(object):
 
         with open('/etc/hostname', 'w') as hostname_file:
             hostname_file.write('%s\n' % self.config.get('name', 'koruza'))
+
+    def update_ip(self):
+        """
+        Refreshes the detected unit's primary IP address.
+        """
+
+        temporary_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self._ip = socket.inet_ntoa(fcntl.ioctl(
+                temporary_socket.fileno(),
+                0x8915,  # SIOCGIFADDR
+                struct.pack('256s', 'eth0')
+            )[20:24])
+        except IOError:
+            self._ip = None
 
     def set_config(self, config):
         """
@@ -864,15 +882,7 @@ class Controller(object):
 
             # Discover primary IP address.
             if not self._ip and now - last_ip_check > 30:
-                temporary_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                try:
-                    self._ip = socket.inet_ntoa(fcntl.ioctl(
-                        temporary_socket.fileno(),
-                        0x8915,  # SIOCGIFADDR
-                        struct.pack('256s', 'eth0')
-                    )[20:24])
-                except IOError:
-                    self._ip = None
+                self.update_ip()
 
             # Attempt to reinitialize device drivers when not present.
             if not self.motor:
