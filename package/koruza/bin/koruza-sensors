@@ -14,11 +14,26 @@ import threading
 import socket
 import fcntl
 import requests
+import httplib
 
 CONFIG_FILE = '/koruza/config/koruza.conf'
 CONFIG_SCHEMA = {
     'distance': int,
 }
+
+
+# Patch httplib.HTTPResponse to not fail on incomplete reads.
+# See also: https://stackoverflow.com/questions/14149100/incompleteread-using-httplib
+def patch_http_response_read(func):
+    def inner(*args):
+        try:
+            return func(*args)
+        except httplib.IncompleteRead, e:
+            return e.partial
+
+    return inner
+
+httplib.HTTPResponse.read = patch_http_response_read(httplib.HTTPResponse.read)
 
 
 class IPC(object):
