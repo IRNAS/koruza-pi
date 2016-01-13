@@ -639,6 +639,10 @@ class Controller(object):
         with open(CONFIG_FILE, 'r') as config_file:
             self.config = json.load(config_file)
 
+        # Load version.
+        with open('/koruza/version', 'r') as version_file:
+            self.version = version_file.read().strip()
+
         self.update_hostname()
 
         # Check if all the required 1wire kernel modules are loaded and load them.
@@ -720,6 +724,7 @@ class Controller(object):
         self.update_ip()
 
         return {
+            'version': self.version,
             'uuid': str(self._uuid),
             'ip': self._ip,
             'config': self.config,

@@ -43,12 +43,36 @@ class StatusPage extends React.Component {
 }
 
 class AboutPage extends React.Component {
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            version: null,
+        }
+    }
+
+    componentWillMount() {
+        Bus.command('get_status', {}, (status) => {
+            this.setState({
+                version: status.version,
+            });
+        });
+    }
+
     render() {
+        let style = {
+            version: {
+                fontFamily: 'Courier'
+            }
+        };
+
+        let version = this.state.version ? this.state.version : "unknown";
+
         return (
             <ClearFix>
                 <h2>About</h2>
 
-                KORUZA controller web interface.
+                KORUZA controller web interface version <span style={style.version}>{version}</span>.
             </ClearFix>
         );
     }
