@@ -2,6 +2,10 @@
 Installation
 ------------
 
+Requirements
+===================
+Raspberry Pi 2B running [Raspberry Jesse](https://www.raspberrypi.org/downloads/raspbian/) system and [KORUZA](http://koruza.net) RPi shield. Copy the system to an SD card and boot the RPi and install the system.
+
 From Git repository
 ===================
 
