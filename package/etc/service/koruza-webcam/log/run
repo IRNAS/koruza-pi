@@ -1,0 +1,7 @@
+#!/bin/bash -e
+
+mkdir -p /koruza/log/webcam
+chown nobody:nogroup /koruza/log/webcam
+
+exec chpst -u nobody:nogroup svlogd -tt /koruza/log/webcam
+

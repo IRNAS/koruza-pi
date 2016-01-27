@@ -30,6 +30,17 @@ export default class SettingsPage extends React.Component {
             {key: 'distance', name: 'Distance'},
             {key: 'remote_ip', name: 'Remote Unit IP'},
             {key: 'data_measurement_host', name: 'Network Measurement Host'},
+            {
+                key: 'imgur_album',
+                name: 'Imgur Album',
+                readOnly: true,
+                transform: (value) => {
+                    let url = 'https://imgur.com/a/' + value;
+                    return <a href={url}>{value}</a>;
+                },
+            },
+            {key: 'private_imgur_id', name: 'Imgur API ID'},
+            {key: 'private_imgur_secret', name: 'Imgur API Secret'},
         ]
 
         this._onAuthenticated = this._onAuthenticated.bind(this);
@@ -103,22 +114,39 @@ export default class SettingsPage extends React.Component {
             else
                 value = '' + this.state.settings[option.key];
 
-            optionWidgets.push(
-                <div className="row middle-xs" key={option.key} style={styles.option}>
-                    <div className="col-md-6" style={styles.optionName}>
-                        <b>{option.name}</b>
+            if (!option.readOnly) {
+                optionWidgets.push(
+                    <div className="row middle-xs" key={option.key} style={styles.option}>
+                        <div className="col-md-6" style={styles.optionName}>
+                            <b>{option.name}</b>
+                        </div>
+                        <div className="col-md-6">
+                            <TextField
+                                hintText={option.name}
+                                value={value}
+                                ref={option.key}
+                                disabled={!this.state.authenticated}
+                                onChange={this._onOptionChanged.bind(this, option.key)}
+                            />
+                        </div>
                     </div>
-                    <div className="col-md-6">
-                        <TextField
-                            hintText={option.name}
-                            value={value}
-                            ref={option.key}
-                            disabled={!this.state.authenticated}
-                            onChange={this._onOptionChanged.bind(this, option.key)}
-                        />
+                );
+            } else {
+                if (option.transform) {
+                    value = option.transform(value);
+                }
+
+                optionWidgets.push(
+                    <div className="row middle-xs" key={option.key} style={styles.option}>
+                        <div className="col-md-6" style={styles.optionName}>
+                            <b>{option.name}</b>
+                        </div>
+                        <div className="col-md-6">
+                            {value}
+                        </div>
                     </div>
-                </div>
-            );
+                );
+            }
         }
 
         return (

@@ -98,7 +98,19 @@ class Client(object):
                             self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Deauthentication failed.")
                     elif command == 'get_status':
                         # The 'get_status' command is allowed even when the user is not authenticated.
-                        self._relay_command(message)
+                        def sanitize_reply(data):
+                            if not self._authenticated:
+                                # Ensure that private configuration is not sent to unauthenticated clients.
+                                data = json.loads(data)
+                                for key in data['config'].keys():
+                                    if key.startswith('private_'):
+                                        del data['config'][key]
+
+                                data = json.dumps(data)
+
+                            return data
+
+                        self._relay_command(message, transform=sanitize_reply)
                     else:
                         if not self._authenticated:
                             self.reply_error(Client.ERROR_NOT_AUTHORIZED, "Not authorized.")
@@ -154,7 +166,7 @@ class Client(object):
         self._authenticated = False
         return True
 
-    def _relay_command(self, message):
+    def _relay_command(self, message, transform=lambda x: x):
         if self._command_bus is None:
             return
 
@@ -166,7 +178,7 @@ class Client(object):
 
         # Wait for a response and dispatch it via the web socket.
         rl, wl, xl = select.select([rfd], [], [])
-        data = self._command_bus.recv()
+        data = transform(self._command_bus.recv())
         self._socket.send('command@' + data)
 
     def send_raw(self, data):

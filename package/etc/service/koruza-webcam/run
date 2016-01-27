@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd /koruza/controllers
+exec /usr/bin/python /koruza/controllers/webcam.py 2>&1
+
