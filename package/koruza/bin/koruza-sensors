@@ -16,9 +16,15 @@ import fcntl
 import requests
 import httplib
 
+
+def schema_hostname(value):
+    return str(value).strip()
+
 CONFIG_FILE = '/koruza/config/koruza.conf'
 CONFIG_SCHEMA = {
     'distance': int,
+    'remote_ip': schema_hostname,
+    'data_measurement_host': schema_hostname,
 }
 
 
