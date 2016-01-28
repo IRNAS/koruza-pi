@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import koruza
 import base64
+import datetime
 import imgurpython
 import time
 import requests
@@ -76,7 +77,7 @@ class WebCam(koruza.Application):
                 'type': 'base64',
                 'image': base64.b64encode(data),
                 'name': 'koruza',
-                'title': "KORUZA Snapshot",
+                'title': "KORUZA Snapshot (%s)" % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
                 'album': album_id,
             },
             force_anon=True,
