@@ -35,8 +35,12 @@ export default class SettingsPage extends React.Component {
                 name: 'Imgur Album',
                 readOnly: true,
                 transform: (value) => {
-                    let url = 'https://imgur.com/a/' + value;
-                    return <a href={url}>{value}</a>;
+                    if (value) {
+                        let url = 'https://imgur.com/a/' + value;
+                        return <a href={url}>{value}</a>;
+                    } else {
+                        return <i>Album not yet created.</i>;
+                    }
                 },
             },
             {key: 'private_imgur_id', name: 'Imgur API ID'},
@@ -68,6 +72,9 @@ export default class SettingsPage extends React.Component {
     _onApplyChangesClicked() {
         let config = {};
         for (let option of this.configurationOptions) {
+            if (option.readOnly)
+                continue;
+
             let value = this.refs[option.key].getValue();
             // TODO: Validation.
             config[option.key] = value;
