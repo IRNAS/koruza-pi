@@ -7,7 +7,7 @@ fi
 
 SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-webcam koruza-vpn"
 
-sv -v stop ${SERVICES} 2>/dev/null || true
+sv -w 30 stop ${SERVICES} 2>/dev/null || true
 /koruza/install-packages
 /koruza/install-config
-sv -v start ${SERVICES}
+sv -w 30 start ${SERVICES}

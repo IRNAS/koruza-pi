@@ -21,7 +21,7 @@ UPGRADE_SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors kor
 
 update-rc.d watchdog remove
 /etc/init.d/watchdog stop
-sv -v stop ${UPGRADE_SERVICES}
+sv -w 30 stop ${UPGRADE_SERVICES}
 
 cp /koruza/config/koruza.conf /tmp/koruza.conf
 
@@ -32,6 +32,6 @@ mv /tmp/koruza.conf /koruza/config/koruza.conf
 /koruza/install-packages
 /koruza/install-config
 
-sv -v start ${UPGRADE_SERVICES}
+sv -w 30 start ${UPGRADE_SERVICES}
 
 rm -rf "${UPGRADE_DIR}"
