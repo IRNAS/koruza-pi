@@ -1,6 +1,16 @@
 
+#Koruza Pi
+
+This is a KORUZA package for Raspberry Pi (user interface, measurements data collection, controller).
+
+Check  repository [koruza-instructions](https://github.com/IRNAS/KORUZA-instructions) if you are looking for documentation on how to assemble and use Koruza system. See [project website](http://koruza.net/) for complete specification and introduction.
+
+Should you need any support with KORUZA system, get in touch with Institute IRNAS team and others involved in the project via [chat](https://chat.irnas.eu/) or [forum](http://forum.irnas.eu/).
+
+---
+
 Installation
-------------
+===================
 
 Requirements
 ===================
