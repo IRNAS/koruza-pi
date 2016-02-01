@@ -68,33 +68,38 @@ class Application(object):
                     socket = remote_publish
                     remote = True
 
-                topic, payload = socket.recv().split('@', 1)
-                try:
-                    data = json.loads(payload)
-                except ValueError:
-                    continue
+                while True:
+                    try:
+                        topic, payload = socket.recv(nnpy.DONTWAIT).split('@', 1)
+                    except AssertionError:
+                        break
 
-                try:
-                    if topic == self._topic:
-                        if data['type'] == 'command' and not remote:
-                            self.on_command(command_bus, data, last_state, last_remote_state)
-                        elif data['type'] == 'app_status':
-                            state = last_remote_state if remote else last_state
-                            state.setdefault('app_status', {}).update(data['value'])
+                    try:
+                        data = json.loads(payload)
+                    except ValueError:
+                        continue
 
-                            for key in data['value']:
-                                state.setdefault('_age', {}).setdefault('app_status', {})[key] = now
-                    elif topic == 'status':
-                        if remote:
-                            last_remote_state[data['type']] = data
-                            last_remote_state.setdefault('_age', {})[data['type']] = now
-                            self.on_remote_status_update(command_bus, data)
-                        else:
-                            last_state[data['type']] = data
-                            last_state.setdefault('_age', {})[data['type']] = now
-                            self.on_status_update(command_bus, data)
-                except:
-                    traceback.print_exc()
+                    try:
+                        if topic == self._topic:
+                            if data['type'] == 'command' and not remote:
+                                self.on_command(command_bus, data, last_state, last_remote_state)
+                            elif data['type'] == 'app_status':
+                                state = last_remote_state if remote else last_state
+                                state.setdefault('app_status', {}).update(data['value'])
+
+                                for key in data['value']:
+                                    state.setdefault('_age', {}).setdefault('app_status', {})[key] = now
+                        elif topic == 'status':
+                            if remote:
+                                last_remote_state[data['type']] = data
+                                last_remote_state.setdefault('_age', {})[data['type']] = now
+                                self.on_remote_status_update(command_bus, data)
+                            else:
+                                last_state[data['type']] = data
+                                last_state.setdefault('_age', {})[data['type']] = now
+                                self.on_status_update(command_bus, data)
+                    except:
+                        traceback.print_exc()
 
             # Run local processing.
             self.on_idle(command_bus, last_state, last_remote_state)
