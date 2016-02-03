@@ -53,7 +53,7 @@ class WebCam(koruza.Application):
         album_id = config.get('private_imgur_album', None)
         if album_id is None:
             response = api.create_album({
-                'title': "KORUZA",
+                'title': "KORUZA (%s)" % config.get('name', 'koruza'),
                 'privacy': 'public',
                 'layout': 'grid',
             })
@@ -77,7 +77,7 @@ class WebCam(koruza.Application):
                 'type': 'base64',
                 'image': base64.b64encode(data),
                 'name': 'koruza',
-                'title': "KORUZA Snapshot (%s)" % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                'title': "Webcam Snapshot (%s)" % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
                 'album': album_id,
             },
             force_anon=True,
