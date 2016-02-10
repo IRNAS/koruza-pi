@@ -873,7 +873,7 @@ class Controller(object):
                 'packets_sent': int(measurements['koruza']['sent']),
                 'packets_rcvd': int(measurements['koruza']['rcvd']),
             })
-        except (requests.HTTPError, requests.ConnectionError, ValueError, KeyError):
+        except (requests.HTTPError, requests.ConnectionError, httplib.IncompleteRead, ValueError, KeyError):
             self.ipc.publish_error("Failed to read network measurements from '%s'." % data_measurement_host)
 
     def start(self):
