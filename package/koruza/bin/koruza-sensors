@@ -889,16 +889,19 @@ class Controller(object):
             while True:
                 now = time.time()
 
-                if not self.onewire:
-                    self.initialize_1wire()
+                try:
+                    if not self.onewire:
+                        self.initialize_1wire()
 
-                if now - last_read_1wire > 15:
-                    self.read_1wire()
-                    last_read_1wire = now
+                    if now - last_read_1wire > 15:
+                        self.read_1wire()
+                        last_read_1wire = now
 
-                if now - last_read_netmeasure > 3:
-                    self.read_network_measurements()
-                    last_read_netmeasure = now
+                    if now - last_read_netmeasure > 3:
+                        self.read_network_measurements()
+                        last_read_netmeasure = now
+                except:
+                    traceback.print_exc()
 
                 time.sleep(1)
 
