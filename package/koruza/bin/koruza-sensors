@@ -755,6 +755,26 @@ class Controller(object):
         with open('/etc/hostname', 'w') as hostname_file:
             hostname_file.write('%s\n' % self.config.get('name', 'koruza'))
 
+        # Add/replace entry in /etc/hosts.
+        with open('/etc/hosts', 'r') as hosts_file:
+            data = hosts_file.read()
+
+        data = data.split('\n')
+        for index, line in enumerate(data[:]):
+            if not line or line.startswith('#'):
+                continue
+
+            line = line.split()
+            try:
+                if line[0] == '127.0.1.1':
+                    del data[index]
+            except IndexError:
+                continue
+
+        data.append('127.0.1.1\t%s' % self.config.get('name', 'koruza'))
+        with open('/etc/hosts', 'w') as hosts_file:
+            hosts_file.write('\n'.join(data))
+
     def update_ip(self):
         """
         Refreshes the detected unit's primary IP address.
