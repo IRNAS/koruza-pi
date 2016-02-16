@@ -61,6 +61,8 @@ class IPC(object):
     TOPIC_STATUS = 'status'
     # Requests for other applications on the bus.
     TOPIC_APPLICATIONS = 'application.%s'
+    # Information about neighbouring KORUZA units.
+    TOPIC_DISCOVERY = 'discovery'
 
     # Payload types.
     TYPE_EVENT = 'event'
@@ -68,6 +70,7 @@ class IPC(object):
     TYPE_SFP = 'sfp'
     TYPE_1WIRE = '1wire'
     TYPE_NETMEASURE = 'netmeasure'
+    TYPE_NEIGHBOURS = 'neighbours'
     TYPE_COMMAND = 'command'
     TYPE_COMMAND_REPLY = 'cmd_reply'
     TYPE_COMMAND_ERROR = 'cmd_error'
@@ -89,6 +92,11 @@ class IPC(object):
     ERROR_BAD_REQUEST = 400
     ERROR_INTERNAL_SERVER_ERROR = 500
     ERROR_NOT_IMPLEMENTED = 501
+
+    # Multicast discovery.
+    DISCOVERY_GROUP = '224.1.1.100'
+    DISCOVERY_PORT = 7100
+    DISCOVERY_HELO = '\xcd\x03\x8f\xb2'
 
     def __init__(self, controller):
         """
@@ -112,6 +120,31 @@ class IPC(object):
         self._command.bind('ipc:///tmp/koruza-command.ipc')
 
         self._poll = select.poll()
+        try:
+            # Multicast discovery endpoint.
+            self._discovery = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            self._discovery.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._discovery.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+
+            # Get raw IP address of eth0.
+            discovery_ip = fcntl.ioctl(
+                self._discovery.fileno(),
+                0x8915,  # SIOCGIFADDR
+                struct.pack('256s', 'eth0')
+            )[20:24]
+
+            self._discovery.bind((IPC.DISCOVERY_GROUP, IPC.DISCOVERY_PORT))
+            self._discovery.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, discovery_ip)
+            self._discovery.setsockopt(
+                socket.SOL_IP, socket.IP_ADD_MEMBERSHIP,
+                socket.inet_aton(IPC.DISCOVERY_GROUP) + discovery_ip
+            )
+            self._poll.register(self._discovery.fileno(), select.POLLIN | select.POLLOUT)
+            self._last_discover = 0
+            self._neighbours = set()
+        except IOError:
+            self._discovery = None
+
         self._poll.register(self._command.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD), select.POLLIN)
 
     def poll(self):
@@ -119,9 +152,68 @@ class IPC(object):
         Polls the sockets for activity.
         """
 
-        fds = self._poll.poll(10)
-        if not fds:
-            return
+        for fd, event in self._poll.poll(10):
+            if fd == self._discovery.fileno():
+                # Multicast discovery.
+                self._poll_discovery(event)
+            elif fd == self._command.getsockopt(nnpy.SOL_SOCKET, nnpy.RCVFD):
+                # RPC commands.
+                self._poll_command()
+
+    def _poll_discovery(self, event):
+        """
+        Handles the neighbour discovery mechanism.
+        """
+
+        now = time.time()
+        if event & select.POLLOUT and now - self._last_discover > 1:
+            # Emit new discovery probe.
+            msg = struct.pack('>4s16s', IPC.DISCOVERY_HELO, self._controller._uuid.get_bytes())
+            self._discovery.sendto(msg, (IPC.DISCOVERY_GROUP, IPC.DISCOVERY_PORT))
+            self._last_discover = now
+
+        if event & select.POLLIN:
+            # Receive discovery probe.
+            data, address = self._discovery.recvfrom(1024)
+            print "received raw", repr(data), "from", address
+            try:
+                msg_type, peer_uuid = struct.unpack('>4s16s', data)
+
+                if msg_type == IPC.DISCOVERY_HELO:
+                    neighbour = (address, uuid.UUID(bytes=peer_uuid))
+
+                    # Ignore probes from self.
+                    if neighbour[1] == self._controller._uuid:
+                        print "ignoring self-discovery"
+                        return
+
+                    if neighbour not in self._neighbours:
+                        self._neighbours.add(neighbour)
+
+                        self.publish(
+                            IPC.TOPIC_DISCOVERY,
+                            {
+                                'type': IPC.TYPE_NEIGHBOURS,
+                                'neighbours': self.get_neigbhours(),
+                            }
+                        )
+            except ValueError:
+                pass
+
+    def get_neigbhours(self):
+        """
+        Returns the discovered neighbour KORUZA nodes.
+        """
+
+        return [
+            {'uuid': str(neigh_uuid), 'address': neigh_address}
+            for neigh_address, neigh_uuid in self._neighbours
+        ]
+
+    def _poll_command(self):
+        """
+        Handles incoming RPC commands.
+        """
 
         try:
             data = json.loads(self._command.recv())
@@ -745,6 +837,7 @@ class Controller(object):
             'motor': self.motor.serialize() if self.motor else None,
             'sfp': [sfp.serialize() for sfp in self.sfp],
             '1wire': [device.serialize() for device in self.onewire],
+            'neighbours': self.ipc.get_neigbhours(),
         }
 
     def update_hostname(self):
