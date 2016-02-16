@@ -220,6 +220,12 @@ while True:
                     'version': 1,
                 },
                 'ip': get_interface_ip('tun0'),
+            },
+            'koruza.link': {
+                '_meta': {
+                    'version': 1,
+                },
+                'neighbour_uuid': None,
             }
         }
 
@@ -228,6 +234,7 @@ while True:
             command_bus.send(json.dumps({'type': 'command', 'command': 'get_status'}))
             node_config = json.loads(command_bus.recv())['config']
             feed['koruza.vpn']['name'] = node_config.get('name', '')
+            feed['koruza.link']['neighbour_uuid'] = node_config.get('remote_uuid', None)
 
             data_measurement_host = node_config['data_measurement_host']
             measurements = requests.get('http://%s/cgi-bin/koruza/netmeasured_get' % data_measurement_host).json()

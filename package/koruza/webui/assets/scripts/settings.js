@@ -29,6 +29,7 @@ export default class SettingsPage extends React.Component {
             {key: 'motor_max_f', name: 'Motor Max F'},
             {key: 'distance', name: 'Distance'},
             {key: 'remote_ip', name: 'Remote Unit IP'},
+            {key: 'remote_uuid', name: 'Remote Unit UUID'},
             {key: 'data_measurement_host', name: 'Network Measurement Host'},
             {
                 key: 'imgur_album',
