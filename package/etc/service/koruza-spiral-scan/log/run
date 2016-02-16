@@ -1,7 +1,6 @@
 #!/bin/bash -e
 
-mkdir -p /koruza/log/spiral-scan
-chown nobody:nogroup /koruza/log/spiral-scan
+mkdir -p /var/log/koruza/spiral-scan
+chown nobody:nogroup /var/log/koruza/spiral-scan
 
-exec chpst -u nobody:nogroup svlogd -tt /koruza/log/spiral-scan
-
+exec chpst -u nobody:nogroup svlogd -tt /var/log/koruza/spiral-scan

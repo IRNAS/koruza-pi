@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
-mkdir -p /koruza/log/webui
-chown nobody:nogroup /koruza/log/webui
+mkdir -p /var/log/koruza/webui
+chown nobody:nogroup /var/log/koruza/webui
 
-exec chpst -u nobody:nogroup svlogd -tt /koruza/log/webui
+exec chpst -u nobody:nogroup svlogd -tt /var/log/koruza/webui
 

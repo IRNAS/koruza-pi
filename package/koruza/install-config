@@ -30,3 +30,14 @@ with open('/etc/modules', 'r+') as modules_cfg:
     append_config(modules_cfg, 'bcm2708_wdog', existing_configuration)
     append_config(modules_cfg, 'i2c-dev', existing_configuration)
     append_config(modules_cfg, 'i2c-bcm2708', existing_configuration)
+
+# Setup fstab.
+print "Updating fstab."
+with open('/etc/fstab', 'r+') as fstab_cfg:
+    existing_configuration = [
+        line
+        for line in fstab_cfg.read().split('\n')
+        if line.strip() and not line.strip().startswith('#')
+    ]
+
+    append_config(fstab_cfg, 'tmpfs   /var/log    tmpfs    defaults,noatime,nosuid,mode=0755,size=100m    0 0', existing_configuration)
