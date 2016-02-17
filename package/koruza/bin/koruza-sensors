@@ -774,6 +774,7 @@ class Controller(object):
         data.append('127.0.1.1\t%s' % self.config.get('name', 'koruza'))
         with open('/etc/hosts', 'w') as hosts_file:
             hosts_file.write('\n'.join(data))
+            hosts_file.write('\n')
 
     def update_ip(self):
         """
