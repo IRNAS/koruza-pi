@@ -19,6 +19,10 @@ PIN_SW_UNREGULATED = 17
 PIN_SW_DRAIN = 4
 # Input for reed switch.
 PIN_IN_SWITCH = 16
+# Serial communication pin
+PIN_TX0 = 14
+# Serial communication pin
+PIN_RX0 = 15
 
 # Enable pins.
 GPIO.setwarnings(False)
@@ -35,7 +39,7 @@ GPIO.setup(PIN_IN_SWITCH, GPIO.IN)
 GPIO.output(PIN_LED_STATUS, GPIO.HIGH)
 GPIO.output(PIN_LED_LINK, GPIO.HIGH)
 GPIO.output(PIN_LED_MOTORS, GPIO.HIGH)
-GPIO.output(PIN_SW_LASER_POWER, GPIO.HIGH)
+GPIO.output(PIN_SW_LASER_POWER, GPIO.LOW)
 GPIO.output(PIN_SW_SFP_OUTPUT, GPIO.HIGH)
 GPIO.output(PIN_SW_UNREGULATED, GPIO.LOW)
 GPIO.output(PIN_SW_DRAIN, GPIO.LOW)
@@ -95,7 +99,10 @@ while True:
     if (is_timeout(last_sfp_update) or is_timeout(last_motors_update)) and is_timeout(last_sfp_watchdog, 60):
         print "WARNING: SFP/motor watchdog triggered, cycling PIN_SW_SFP_OUTPUT."
         GPIO.output(PIN_SW_SFP_OUTPUT, GPIO.LOW)
-        time.sleep(1)
+        # Reset on UART pin to fix a bug of parasite power
+        GPIO.setup(PIN_TX0, GPIO.OUT)
+        GPIO.output(PIN_TX0, GPIO.LOW)
+        time.sleep(5)
         GPIO.output(PIN_SW_SFP_OUTPUT, GPIO.HIGH)
         last_sfp_watchdog = now
 
