@@ -267,14 +267,6 @@ class Alignment(koruza.Application):
                 #if self.sfp_reading > self.max_threshold + 1:
                 #    self.max_threshold = self.sfp_reading - 1
 
-                #if self.sfp_reading_self > self.max_threshold_self + 0.2:
-                #    self.max_threshold_self = self.sfp_reading_self - 0.2
-
-                #if self.sfp_reading_remote > self.max_threshold_remote + 0.2:
-                #    self.max_threshold_remote = self.sfp_reading_remote - 0.2
-
-                #print 'UPDATE %d: State: %d, old state: %d, line: %d, point: %d, X: %f, Y: %f, , RX: %f' % (self.k, self.case, self.old_case, self.i, self.j, motor['current_x'], motor['current_y'], sfp['rx_power_db'])
-
                 # Update printing variable
                 self.pri = 0
                 self.count = 0
@@ -308,7 +300,6 @@ class Alignment(koruza.Application):
                     if time.time() - self.wait_time > 3:
                         self.case = 1 # Go to request movment state
                         self.wait_time = time.time()
-                        print 'Initialisation done, go to next state, request to move.'
 
                 # STATE 1: Request movement state
                 elif self.case == 1:
@@ -326,7 +317,6 @@ class Alignment(koruza.Application):
                             # Proceed to wait in the response state
                             self.case = 2
                             self.wait_time = time.time() # Reset waiting time
-                            print 'Send request, K: %d.' % self.counter
 
                         # If next state is not known, reevaluate current signal and move
                         elif self.sfp_reading < self.max_threshold or self.sfp_reading_self < self.max_threshold_self or self.sfp_reading_remote < self.max_threshold_remote:
@@ -337,7 +327,6 @@ class Alignment(koruza.Application):
                             # Proceed to wait for response state
                             self.case = 2
                             self.wait_time = time.time() # Reset waiting time
-                            print 'Send request, K: %d.' % self.counter
 
                 # STATE 2: Wait for response, wait for request
                 elif self.case == 2:
@@ -349,21 +338,18 @@ class Alignment(koruza.Application):
                             # go to waiting state
                             self.case = 3
                             self.wait_time = time.time() # Reset waiting time
-                            print 'Received request, send response: %d.' % self.k
 
                         # Check if requested counter was returned
                         elif self.rec_counter == self.counter:
                             # Start moving
                             self.case = self.old_case
                             self.moving = 1
-                            print 'Received response, start moving!'
 
                         # Stop waiting for other unit if enough time has passed
                         elif time.time() - self.wait_time > 3:
                             # Start moving
                             self.case = self.old_case
                             self.moving = 1
-                            print 'Stop waiting for response, start moving!'
 
                         else:
                             print 'No condition met, Counter: %d, REQ: %d, REC: %d, Wait time: %f' % (self.counter, self.req_counter, self.rec_counter, time.time() - self.wait_time)
@@ -380,7 +366,6 @@ class Alignment(koruza.Application):
                         self.case = 1 # Go to sending request state
                     # if other unit doesn't start moving after 5s, resend request
                     elif time.time() - self.wait_time > 5:
-                        print 'Other unit didnt start moving, resend request!'
                         self.case = 1
 
                 # STATE 4: Hibernation state - setup
@@ -412,8 +397,6 @@ class Alignment(koruza.Application):
                         self.k = self.req_counter # Update your counter
                         self.counter = self.req_counter # Update your counter
                         self.publish({'rec_counter': self.k})
-                        # go to waiting state
-                        print 'Received request, send response: %d.' % self.k
 
                     # Monitor movement:
                     # Every 0.5 second take reading
@@ -465,13 +448,11 @@ class Alignment(koruza.Application):
                     self.old_case = 11
                     self.angle = 0
 
-                    if self.restart == 0 and self.remote_scan == 1:
-                        self.n_points = 2
+                    #if self.restart == 0 and self.remote_scan == 1:
+                    #    self.n_points = 2
                     if self.self_restart == 1:
                         self.n_points = 2
                         self.self_restart = 0
-
-                    print 'Start spiral scann, step: %d nr step: %d' %(self.step, self.n_points)
 
                 # STATE 11: SPIRAL SCAN
                 elif self.case == 11:
@@ -504,7 +485,6 @@ class Alignment(koruza.Application):
                     bus.command('motor_move', next_x = self.wanted_x, next_y = self.wanted_y)
                     self.j += 1 # Increase point count
 
-                    print 'Spiral, moved, i: %d, j: %d, angle: %f' %(self.i, self.j, self.angle)
 
                     # Check if better position was achieved - update values
                     if self.sfp_reading > self.best_rx:
@@ -524,9 +504,7 @@ class Alignment(koruza.Application):
                         self.i = 0 # Reset line count
                         self.a += 2 # Increase angle count
                         # If other unit is performing spiral scan increase number of points, otherwise not
-                        self.n_points += 2 # Increase nr. of points per line
-
-                        # print 'Increase points per line: %d' % self.n_points
+                        self.n_points += 5 # Increase nr. of points per line
 
                     # Check if the whole circle was made, reset angle, leave other unit to move
                     if self.a == 4:
@@ -562,19 +540,7 @@ class Alignment(koruza.Application):
                         self.angle = 0
                         self.a = 0
                         self.l = 0
-                    # Just remote or this unit - restart spiral scan
-                    elif self.sfp_reading_self > self.min_threshold or self.sfp_reading_remote > self.min_threshold:
-                        # Update starting point
-                        self.start_x = motor['current_x']
-                        self.start_y = motor['current_y']
-                        print 'Some small power detected, let other unit scan.'
-                        # Wait for other unit to repeat
-                        self.old_case = 10
-                        self.case = 100
-                        # Restart scanning
-                        self.self_restart = 1
-
-
+                
                     self.wait_time = time.time() # reset waiting counter
 
                 # STATE 20: LINE SCAN
