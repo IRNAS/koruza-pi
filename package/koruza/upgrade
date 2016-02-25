@@ -17,7 +17,7 @@ if [ -z "${UPGRADE_PACKAGE}" ]; then
 fi
 
 # Do not shutdown the vpn service as otherwise we may lose connectivity.
-UPGRADE_SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-webcam"
+UPGRADE_SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-alignment koruza-webcam"
 
 update-rc.d watchdog remove
 /etc/init.d/watchdog stop

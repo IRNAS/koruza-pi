@@ -1,0 +1,4 @@
+#!/bin/bash
+
+cd /koruza/controllers
+exec /usr/bin/python /koruza/controllers/alignment.py 2>&1

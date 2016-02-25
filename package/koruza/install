@@ -5,7 +5,7 @@ if [ ${EUID} -ne 0 ]; then
   exit 1
 fi
 
-SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-webcam koruza-vpn"
+SERVICES="koruza-nodewatcher koruza-gpio koruza-webui koruza-sensors koruza-spiral-scan koruza-alignment koruza-webcam koruza-vpn"
 
 sv -w 30 stop ${SERVICES} 2>/dev/null || true
 /koruza/install-packages

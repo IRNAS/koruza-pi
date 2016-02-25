@@ -9,7 +9,7 @@ import _ from 'underscore';
 
 import Bus from './bus';
 
-export default class Algorithms extends React.Component {
+class ScanAlgorithm extends React.Component {
     constructor(props) {
         super(props);
 
@@ -82,8 +82,8 @@ export default class Algorithms extends React.Component {
         return (
             <Card>
                 <CardHeader
-                    title="Algorithms"
-                    subtitle="Supported algorithms"
+                    title="Scan algorithm"
+                    subtitle="Automated scanning algorithm"
                     avatar={<Avatar>A</Avatar>}
                 />
 
@@ -126,6 +126,167 @@ export default class Algorithms extends React.Component {
                     />
                 </CardText>
             </Card>
+        )
+    }
+}
+
+class AlignmentAlgorithm extends React.Component {
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            // Authentication status.
+            authenticated: Bus.isAuthenticated(),
+        }
+
+        this._onAuthenticated = this._onAuthenticated.bind(this);
+        this._onStartAlignmentClicked = this._onStartAlignmentClicked.bind(this);
+        this._onStopAlignmentClicked = this._onStopAlignmentClicked.bind(this);
+    }
+
+    componentWillMount() {
+        Bus.addAuthenticationListener(this._onAuthenticated);
+    }
+
+    componentWillUnmount() {
+        Bus.removeAuthenticationListener(this._onAuthenticated);
+    }
+
+    _onAuthenticated() {
+        this.setState({
+            authenticated: Bus.isAuthenticated()
+        });
+    }
+
+    _onStartAlignmentClicked() {
+        let powerMax = parseInt(this.refs.powerMax.getValue());
+        if (isNaN(powerMax))
+            return;
+
+        Bus.command('call_application', {
+            'application_id': 'alignment',
+            'payload': {
+                'type': 'command',
+                'command': 'start',
+                'max_threshold': powerMax,
+            }
+        });
+        this.refs.snackbarStartScan.show();
+    }
+
+    _onStopAlignmentClicked() {
+        Bus.command('call_application', {
+            'application_id': 'alignment',
+            'payload': {
+                'type': 'command',
+                'command': 'stop',
+            }
+        });
+        this.refs.snackbarStopScan.show();
+    }
+
+    render() {
+        let styles = {
+            snackbar: {
+                zIndex: 20,
+            }
+        }
+
+        if (!this.state.authenticated) {
+            return (
+                <div></div>
+            )
+        }
+
+        return (
+            <Card>
+                <CardHeader
+                    title="Alignment algorithm"
+                    subtitle="Automated alignment algorithm"
+                    avatar={<Avatar>A</Avatar>}
+                />
+
+                <Snackbar
+                    ref="snackbarStartScan"
+                    message="Requested to start alignment."
+                    autoHideDuration={1000}
+                    style={styles.snackbar}
+                />
+
+                <Snackbar
+                    ref="snackbarStopScan"
+                    message="Requested to stop alignment."
+                    autoHideDuration={1000}
+                    style={styles.snackbar}
+                />
+
+                <CardText>
+                    <TextField
+                        ref="powerMax"
+                        floatingLabelText="Maximum power"
+                        defaultValue={25}
+                    />
+                    <br/><br/>
+
+                    <RaisedButton
+                        label="Start alignment"
+                        onTouchTap={this._onStartAlignmentClicked}
+                    />
+                    &nbsp;
+                    <RaisedButton
+                        label="Stop alignment"
+                        onTouchTap={this._onStopAlignmentClicked}
+                    />
+                </CardText>
+            </Card>
+        )
+    }
+}
+
+export default class Algorithms extends React.Component {
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            // Authentication status.
+            authenticated: Bus.isAuthenticated(),
+        }
+
+        this._onAuthenticated = this._onAuthenticated.bind(this);
+    }
+
+    componentWillMount() {
+        Bus.addAuthenticationListener(this._onAuthenticated);
+    }
+
+    componentWillUnmount() {
+        Bus.removeAuthenticationListener(this._onAuthenticated);
+    }
+
+    _onAuthenticated() {
+        this.setState({
+            authenticated: Bus.isAuthenticated()
+        });
+    }
+
+    render() {
+        if (!this.state.authenticated) {
+            return (
+                <div></div>
+            )
+        }
+
+        return (
+            <div>
+                <div className="row">
+                    <div className="col-md-6">
+                        <AlignmentAlgorithm/>
+                    </div>
+                    <div className="col-md-6">
+                        <ScanAlgorithm/>
+                    </div>
+                </div>
+            </div>
         )
     }
 }
