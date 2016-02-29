@@ -125,6 +125,7 @@ class Alignment(koruza.Application):
             self.l = 0
             self.a = 0
             self.s = 0
+
             self.angle = 0  # angle
             self.n_points = 2  # points in spiral scan
             self.l_points = 5  # nr. of points in a line
@@ -133,12 +134,13 @@ class Alignment(koruza.Application):
             self.best_x_remote = 0
             self.best_y = 0
             self.best_y_self = 0
-            self.best_y_remote
+            self.best_y_remote = 0
             self.best_rx = 0
-            self.best_rx_self
+            self.best_rx_self = 0
             self.best_rx_remote = 0
             self.start_x = 0
             self.start_y = 0
+            
             self.moving = 0
             self.time = time.time()
             self.rec_counter = 0
@@ -151,6 +153,7 @@ class Alignment(koruza.Application):
             self.restart = 0
             self.self_restart = 0
             self.max_time = 1800
+            self.case = 0
 
             # Get variables from the command that was sent on the bus.
             # self.step = command.get('step', 100)
@@ -540,7 +543,7 @@ class Alignment(koruza.Application):
                         self.angle = 0
                         self.a = 0
                         self.l = 0
-                
+
                     self.wait_time = time.time() # reset waiting counter
 
                 # STATE 20: LINE SCAN
