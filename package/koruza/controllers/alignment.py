@@ -115,8 +115,12 @@ class Alignment(koruza.Application):
             self.step_spiral = int(round(self.step_spiral))
 
             # Calculate scaling coefficients based on a distance
-            self.k1 = 0.9 - (self.d*0.8)/100
-            self.k2 = 1 - self.k1
+            if self.d > 100:
+                self.k1 = 0.2
+                self.k2 = 0.8
+            else:
+                self.k1 = 0.9 - (self.d*0.7)/100
+                self.k2 = 1 - self.k1
 
             # Initialize variables.
             self.i = 0
@@ -140,7 +144,7 @@ class Alignment(koruza.Application):
             self.best_rx_remote = 0
             self.start_x = 0
             self.start_y = 0
-            
+
             self.moving = 0
             self.time = time.time()
             self.rec_counter = 0
