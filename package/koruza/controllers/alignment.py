@@ -116,8 +116,8 @@ class Alignment(koruza.Application):
 
             # Calculate scaling coefficients based on a distance
             if self.d > 100:
-                self.k1 = 0.2
-                self.k2 = 0.8
+                self.k1 = 0.1
+                self.k2 = 0.9
             else:
                 self.k1 = 0.9 - (self.d*0.7)/100
                 self.k2 = 1 - self.k1
