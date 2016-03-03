@@ -257,7 +257,8 @@ while True:
         except KeyError:
             pass
         except (requests.HTTPError, requests.ConnectionError, ValueError):
-            print "WARNING: Failed to fetch data measurements from %(data_measurement_host)s." % node_config
+            if node_config['data_measurement_host']:
+                print "WARNING: Failed to fetch data measurements from '%(data_measurement_host)s'." % node_config
 
         def output_sensor(name, state=None, device_id=None):
             if state is None:
