@@ -65,16 +65,20 @@ REPORT_SENSOR_DATA = {
         'status_y': {'name': "Motor Status Y", 'unit': "", 'aggregation': average},
     },
     'sfp': {
-        'rx_power_mw': {'name': "SFP (%(serial)s) RX Power", 'unit': "mW", 'aggregation': average},
-        'rx_power_dbu': {'name': "SFP (%(serial)s) RX Power", 'unit': "dBu", 'aggregation': average_power_db, 'source': 'rx_power_mw'},
-        'rx_power_var': {'name': "SFP (%(serial)s) RX Power variance", 'unit': "mW", 'aggregation': variance, 'source': 'rx_power_mw'},
-        'temperature_c': {'name': "SFP (%(serial)s) Temperature", 'unit': "C", 'aggregation': average},
-        'tx_bias_ma': {'name': "SFP (%(serial)s) TX Bias", 'unit': "mA", 'aggregation': average},
-        'tx_power_mw': {'name': "SFP (%(serial)s) TX Power", 'unit': "mW", 'aggregation': average},
-        'vcc_v': {'name': "SFP (%(serial)s) VCC", 'unit': "V", 'aggregation': average},
+        'rx_power_mw': {'name': "SFP (%(id)s) RX Power", 'unit': "mW", 'aggregation': average},
+        'rx_power_dbu': {'name': "SFP (%(id)s) RX Power", 'unit': "dBu", 'aggregation': average_power_db, 'source': 'rx_power_mw'},
+        'rx_power_var': {'name': "SFP (%(id)s) RX Power variance", 'unit': "mW", 'aggregation': variance, 'source': 'rx_power_mw'},
+        'temperature_c': {'name': "SFP (%(id)s) Temperature", 'unit': "C", 'aggregation': average},
+        'tx_bias_ma': {'name': "SFP (%(id)s) TX Bias", 'unit': "mA", 'aggregation': average},
+        'tx_power_mw': {'name': "SFP (%(id)s) TX Power", 'unit': "mW", 'aggregation': average},
+        'vcc_v': {'name': "SFP (%(id)s) VCC", 'unit': "V", 'aggregation': average},
     },
     '1wire': {
-        'temperature_c': {'name': "1wire (%(device_id)s) Temperature", 'unit': "C", 'aggregation': average},
+        'temperature_c': {'name': "1wire (%(id)s) Temperature", 'unit': "C", 'aggregation': average},
+    },
+    'alignment': {
+        'sfp_reading': {'name': "Alignment (sfp_reading)", 'unit': "", 'aggregation': average},
+        'case': {'name': "Alignment (case)", 'unit': "", 'aggregation': average},
     }
 }
 # Snapshot interval (in seconds) and number of snapshots to keep for aggregation.
@@ -84,7 +88,8 @@ SNAPSHOT_COUNT = int(NODEWATCHER_PUSH_INTERVAL / SNAPSHOT_INTERVAL)
 # Establish IPC connection.
 ipc = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
 ipc.connect('ipc:///tmp/koruza-publish.ipc')
-ipc.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, '')
+ipc.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, 'status')
+ipc.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, 'application.alignment')
 
 command_bus = nnpy.Socket(nnpy.AF_SP, nnpy.REQ)
 command_bus.connect('ipc:///tmp/koruza-command.ipc')
@@ -163,46 +168,38 @@ while True:
 
         last_update = last_state_update.get(data['type'], 0)
         if now - last_update > SNAPSHOT_INTERVAL and data['type'] in REPORT_SENSOR_DATA:
+            # Convert message type for application-related updates.
+            if topic == 'application.alignment' and data['type'] == 'app_status':
+                data['type'] = 'alignment'
+
             # Update current state.
             last_state_update[data['type']] = now
             state = current_state.setdefault(data['type'], {})
 
-            if data['type'] == 'motors':
+            def update_state(state_input, state_output):
                 for key, descriptor in REPORT_SENSOR_DATA[data['type']].items():
                     source_key = descriptor.get('source', key)
-                    if source_key not in data['motor']:
+                    if source_key not in state_input:
                         continue
 
-                    points = state.setdefault(key, [])
-                    points.append(data['motor'][source_key])
+                    points = state_output.setdefault(key, [])
+                    points.append(state_input[source_key])
                     if len(points) > SNAPSHOT_COUNT:
                         points.pop(0)
+
+            # Perform the state update depending on the message type.
+            if data['type'] == 'motors':
+                update_state(data['motor'], state)
             elif data['type'] == 'sfp':
                 for serial, sfp in data['sfp'].items():
                     sfp_state = state.setdefault(serial, {})
-
-                    for key, descriptor in REPORT_SENSOR_DATA[data['type']].items():
-                        source_key = descriptor.get('source', key)
-                        if source_key not in sfp:
-                            continue
-
-                        points = sfp_state.setdefault(key, [])
-                        points.append(sfp[source_key])
-                        if len(points) > SNAPSHOT_COUNT:
-                            points.pop(0)
+                    update_state(sfp, sfp_state)
             elif data['type'] == '1wire':
                 for device_id, device in data['devices'].items():
                     device_state = state.setdefault(device_id, {})
-
-                    for key, descriptor in REPORT_SENSOR_DATA[data['type']].items():
-                        source_key = descriptor.get('source', key)
-                        if source_key not in device:
-                            continue
-
-                        points = device_state.setdefault(key, [])
-                        points.append(device[source_key])
-                        if len(points) > SNAPSHOT_COUNT:
-                            points.pop(0)
+                    update_state(device, device_state)
+            elif data['type'] == 'alignment':
+                update_state('value', state)
 
     # Push data to nodewatcher.
     if now - last_push > NODEWATCHER_PUSH_INTERVAL:
@@ -262,34 +259,31 @@ while True:
         except (requests.HTTPError, requests.ConnectionError, ValueError):
             print "WARNING: Failed to fetch data measurements from %(data_measurement_host)s." % node_config
 
+        def output_sensor(name, state=None, device_id=None):
+            if state is None:
+                state = current_state.get(name, {})
+
+            for key, points in state.items():
+                descriptor = REPORT_SENSOR_DATA[name][key]
+                feed['sensors.generic']['%s-%s' % (name, key)] = {
+                    'name': descriptor['name'] % {'id': device_id},
+                    'unit': descriptor['unit'],
+                    'value': float(descriptor['aggregation'](points)),
+                }
+
         # Motors.
-        for key, points in current_state.get('motors', {}).items():
-            descriptor = REPORT_SENSOR_DATA['motors'][key]
-            feed['sensors.generic']['motors-%s' % key] = {
-                'name': descriptor['name'],
-                'unit': descriptor['unit'],
-                'value': float(descriptor['aggregation'](points)),
-            }
+        output_sensor('motors')
 
         # SFP modules.
         for serial, sfp in current_state.get('sfp', {}).items():
-            for key, points in sfp.items():
-                descriptor = REPORT_SENSOR_DATA['sfp'][key]
-                feed['sensors.generic']['sfp-%s-%s' % (serial, key)] = {
-                    'name': descriptor['name'] % {'serial': serial},
-                    'unit': descriptor['unit'],
-                    'value': float(descriptor['aggregation'](points)),
-                }
+            output_sensor('sfp', sfp, serial)
 
         # 1wire devices.
         for device_id, device in current_state.get('1wire', {}).items():
-            for key, points in device.items():
-                descriptor = REPORT_SENSOR_DATA['1wire'][key]
-                feed['sensors.generic']['1wire-%s-%s' % (device_id, key)] = {
-                    'name': descriptor['name'] % {'device_id': device_id},
-                    'unit': descriptor['unit'],
-                    'value': float(descriptor['aggregation'](points)),
-                }
+            output_sensor('1wire', device, device_id)
+
+        # Alignment.
+        output_sensor('alignment')
 
         # Post update to nodewatcher.
         try:

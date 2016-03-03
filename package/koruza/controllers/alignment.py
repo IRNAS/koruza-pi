@@ -12,7 +12,7 @@ class Alignment(koruza.Application):
     application_id = 'alignment'
     # Should be true if the application would like to access the remote unit.
     needs_remote = True
-    
+
     # Current state.
     state = 'idle'
     # Initial position.
@@ -284,7 +284,7 @@ class Alignment(koruza.Application):
                     # Update current state
                     self.moving = 0
                     # initialise current position to best position
-                    self.best_x = motor['current_x'] 
+                    self.best_x = motor['current_x']
                     self.best_y = motor['current_y']
                     self.best_rx = self.sfp_reading
                     self.start_x = motor['current_x']
@@ -495,7 +495,7 @@ class Alignment(koruza.Application):
 
                     # Check if better position was achieved - update values
                     if self.sfp_reading > self.best_rx:
-                        self.best_x = motor['current_x'] 
+                        self.best_x = motor['current_x']
                         self.best_y = motor['current_y']
                         self.best_rx = self.sfp_reading
 
@@ -558,7 +558,7 @@ class Alignment(koruza.Application):
                     # If starting new line make starting point best position
                     # Check if better position was achieved - update values
                     if self.sfp_reading > self.best_rx or self.j == 0:
-                        self.best_x = motor['current_x'] 
+                        self.best_x = motor['current_x']
                         self.best_y = motor['current_y']
                         self.best_rx = self.sfp_reading
 
@@ -584,7 +584,7 @@ class Alignment(koruza.Application):
 
                     # Check if line has been scanned
                     elif self.j == self.l_points:
-                        # Reset counter 
+                        # Reset counter
                         self.j = 0
                         # Increase line counter
                         self.i = self.i + 1
@@ -618,7 +618,7 @@ class Alignment(koruza.Application):
                         else:
                             # update angle
                             self.angle += math.pi / 2 # Rotate for 90
-                            # go to best point 
+                            # go to best point
                             self.wanted_x = self.best_x
                             self.wanted_y = self.best_y
 
@@ -734,13 +734,16 @@ class Alignment(koruza.Application):
                 # Publish status every 0.2 seconds
                 if time.time() - self.time > 0.2:
                     self.time = time.time()
-                    self.publish({'time': self.time})
-                    self.publish({'case': self.case})
-                    self.publish({'moving': self.moving})
-                    self.publish({'remote_scan': self.self_scan})
+                    self.publish({
+                        'time': self.time,
+                        'case': self.case,
+                        'moving': self.moving,
+                        'remote_scan': self.self_scan,
+                        'sfp_reading': self.sfp_reading,
+                    })
 
         elif self.state == 'idle':
             pass
-        
+
 
 Alignment().start()
