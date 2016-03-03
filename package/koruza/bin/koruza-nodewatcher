@@ -166,12 +166,12 @@ while True:
         topic, payload = ipc.recv().split('@', 1)
         data = json.loads(payload)
 
+        # Convert message type for application-related updates.
+        if topic == 'application.alignment' and data['type'] == 'app_status':
+            data['type'] = 'alignment'
+
         last_update = last_state_update.get(data['type'], 0)
         if now - last_update > SNAPSHOT_INTERVAL and data['type'] in REPORT_SENSOR_DATA:
-            # Convert message type for application-related updates.
-            if topic == 'application.alignment' and data['type'] == 'app_status':
-                data['type'] = 'alignment'
-
             # Update current state.
             last_state_update[data['type']] = now
             state = current_state.setdefault(data['type'], {})
@@ -199,7 +199,7 @@ while True:
                     device_state = state.setdefault(device_id, {})
                     update_state(device, device_state)
             elif data['type'] == 'alignment':
-                update_state('value', state)
+                update_state(data['value'], state)
 
     # Push data to nodewatcher.
     if now - last_push > NODEWATCHER_PUSH_INTERVAL:
