@@ -12,7 +12,7 @@ class Alignment(koruza.Application):
     application_id = 'alignment'
     # Should be true if the application would like to access the remote unit.
     needs_remote = True
-
+    
     # Current state.
     state = 'idle'
     # Initial position.
@@ -87,6 +87,8 @@ class Alignment(koruza.Application):
     start_time = 0 # Algorithm running time - start time
     max_time = 1800 # Max time before algorithm timeout
     remote_time = 0 # Time of remote unit
+    con_timeout = 0 # Connection timeout
+    print_time = 0 # printing time
     req_counter = 0 # Request counter (recieved)
     rec_counter = 0 # Response counter (recieved)
     counter = 0 # Last send counter
@@ -116,8 +118,8 @@ class Alignment(koruza.Application):
 
             # Calculate scaling coefficients based on a distance
             if self.d > 100:
-                self.k1 = 0.1
-                self.k2 = 0.9
+                self.k1 = 0.2
+                self.k2 = 0.8
             else:
                 self.k1 = 0.9 - (self.d*0.7)/100
                 self.k2 = 1 - self.k1
@@ -157,6 +159,8 @@ class Alignment(koruza.Application):
             self.restart = 0
             self.self_restart = 0
             self.max_time = 1800
+            self.con_timeout = 0
+            self.print_time = time.time()
             self.case = 0
 
             # Get variables from the command that was sent on the bus.
@@ -186,11 +190,18 @@ class Alignment(koruza.Application):
             self.wanted_x = motor['current_x']
             self.wanted_y = motor['current_y']
             self.state = 'go'
+            self.con_timeout = time.time() # Start timeout conter
 
         elif self.state == 'go':
             if not state.get('sfp') or not state.get('motors') or not remote_state.get('motors') or not remote_state.get('sfp'):
                 # Do nothing until we have known last state from SFP and motor drivers.
+                # Check if timeout
+                if time.time()-self.con_timeout > 10:
+                    print 'Connection timeout!'
+                    self.con_timeout = time.time()
                 return
+            # Reset connection timeout
+            self.con_timeout = time.time()
             # Get last known state for the first SFP module.
             sfp = state['sfp']['sfp'].values()[0]
             sfp_remote = remote_state['sfp']['sfp'].values()[0]
@@ -206,9 +217,11 @@ class Alignment(koruza.Application):
                 self.count = 0
                 if not motor['next_x'] == self.wanted_x or not motor['next_y'] == self.wanted_y:
                     print 'SENDING ERROR, RESEND DATA!'
+                    print 'READING: C: %d, RC: %d, X: %d, nX: %d, wX: %d, Y: %d, nY: %d, wY: %d, SFP: %f' % (self.case, self.remote_case, motor['current_x'], motor['next_x'], self.wanted_x, motor['current_y'], motor['next_y'], self.wanted_y, self.sfp_reading)
                     bus.command('motor_move', next_x = self.wanted_x, next_y = self.wanted_y)
                 elif not motor['current_x'] == self.wanted_x or not motor['current_y'] == self.wanted_y:
                     print 'SENDING ERROR, CHANGE WANTED POSITION!'
+                    print 'READING: C: %d, RC: %d, X: %d, nX: %d, wX: %d, Y: %d, nY: %d, wY: %d, SFP: %f' % (self.case, self.remote_case, motor['current_x'], motor['next_x'], self.wanted_x, motor['current_y'], motor['next_y'], self.wanted_y, self.sfp_reading)
                     self.wanted_x =  motor['current_x']
                     self.wanted_y = motor['current_y']
             # Increase loop counter
@@ -257,8 +270,11 @@ class Alignment(koruza.Application):
                     self.start_time = time.time()
                     # Reset stop time
                     self.max_time = 1800
+                    print 'Alignment timeout. Go to hibernation state.'
 
-                print 'READING: K: %d, C: %d, RC: %d, M: %d, RM: %d, REQ: %d, REC: %d, DTime: %f' % (self.k, self.case, self.remote_case, self.moving, self.remote_moving, self.req_counter, self.rec_counter, time.time() - self.remote_time)
+                if self.moving == 1 or time.time() - self.print_time > 1:
+                    print 'READING: C: %d, RC: %d, X: %d, nX: %d, wX: %d, Y: %d, nY: %d, wY: %d, SFP: %f' % (self.case, self.remote_case, motor['current_x'], motor['next_x'], self.wanted_x, motor['current_y'], motor['next_y'], self.wanted_y, self.sfp_reading)
+                    self.print_time = time.time() #Reset printing time
 
                 # UPDATE SFP READING
                 self.sfp_reading = self.k1*sfp['rx_power_db'] + self.k2*sfp_remote['rx_power_db']
@@ -284,7 +300,7 @@ class Alignment(koruza.Application):
                     # Update current state
                     self.moving = 0
                     # initialise current position to best position
-                    self.best_x = motor['current_x']
+                    self.best_x = motor['current_x'] 
                     self.best_y = motor['current_y']
                     self.best_rx = self.sfp_reading
                     self.start_x = motor['current_x']
@@ -495,7 +511,7 @@ class Alignment(koruza.Application):
 
                     # Check if better position was achieved - update values
                     if self.sfp_reading > self.best_rx:
-                        self.best_x = motor['current_x']
+                        self.best_x = motor['current_x'] 
                         self.best_y = motor['current_y']
                         self.best_rx = self.sfp_reading
 
@@ -558,7 +574,7 @@ class Alignment(koruza.Application):
                     # If starting new line make starting point best position
                     # Check if better position was achieved - update values
                     if self.sfp_reading > self.best_rx or self.j == 0:
-                        self.best_x = motor['current_x']
+                        self.best_x = motor['current_x'] 
                         self.best_y = motor['current_y']
                         self.best_rx = self.sfp_reading
 
@@ -584,7 +600,7 @@ class Alignment(koruza.Application):
 
                     # Check if line has been scanned
                     elif self.j == self.l_points:
-                        # Reset counter
+                        # Reset counter 
                         self.j = 0
                         # Increase line counter
                         self.i = self.i + 1
@@ -618,7 +634,7 @@ class Alignment(koruza.Application):
                         else:
                             # update angle
                             self.angle += math.pi / 2 # Rotate for 90
-                            # go to best point
+                            # go to best point 
                             self.wanted_x = self.best_x
                             self.wanted_y = self.best_y
 
@@ -734,16 +750,13 @@ class Alignment(koruza.Application):
                 # Publish status every 0.2 seconds
                 if time.time() - self.time > 0.2:
                     self.time = time.time()
-                    self.publish({
-                        'time': self.time,
-                        'case': self.case,
-                        'moving': self.moving,
-                        'remote_scan': self.self_scan,
-                        'sfp_reading': self.sfp_reading,
-                    })
+                    self.publish({'time': self.time})
+                    self.publish({'case': self.case})
+                    self.publish({'moving': self.moving})
+                    self.publish({'remote_scan': self.self_scan})
 
         elif self.state == 'idle':
             pass
-
+        
 
 Alignment().start()
