@@ -20,7 +20,7 @@ From Git repository
 ===================
 
 To install the latest version directly from the repository do the following on
-the Raspberry Pi running KORUZA:
+the Raspberry Pi running Raspbian:
 
 ```
 $ git clone https://github.com/IRNAS/koruza-pi
