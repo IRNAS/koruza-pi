@@ -53,10 +53,7 @@ class MotorController extends React.Component {
         Bus.command('motor_configure', {laser: toggled});
     }
 
-    _onKeydown(event) {
-        if (!this.state.controlEnabled)
-            return;
-
+    _getNextState(keyCode) {
         let steps = this.refs.steps.getValue();
         let keymap = {
             // A.
@@ -71,9 +68,7 @@ class MotorController extends React.Component {
             86: (state) => { state.nextF = Math.max(0, state.nextF - steps); },
             // F.
             70: (state) => { state.nextF = Math.min(this.state.maxF, state.nextF + steps); },
-        }
-        if (!keymap[event.keyCode])
-            return;
+        };
 
         let nextState;
         if (!this.state.nextState)
@@ -81,15 +76,14 @@ class MotorController extends React.Component {
         else
             nextState = this.state.nextState;
 
-        keymap[event.keyCode](nextState);
-        this.setState({nextState: nextState});
+        if (!keymap[keyCode])
+            return nextState;
+
+        keymap[keyCode](nextState);
+        return nextState;
     }
 
-    _onKeyup(event) {
-        if (!this.state.controlEnabled || !this.state.nextState)
-            return;
-
-        let nextState = this.state.nextState;
+    _executeNextState(nextState) {
         this.setState({
             nextX: nextState.nextX,
             nextY: nextState.nextY,
@@ -102,6 +96,24 @@ class MotorController extends React.Component {
             next_y: nextState.nextY,
             next_f: nextState.nextF,
         });
+    }
+
+    _onKeydown(event) {
+        if (!this.state.controlEnabled)
+            return;
+
+        this.setState({nextState: this._getNextState(event.keyCode)});
+    }
+
+    _onKeyup(event) {
+        if (!this.state.controlEnabled || !this.state.nextState)
+            return;
+
+        this._executeNextState(this.state.nextState);
+    }
+
+    _simulateKeyPress(key) {
+        this._executeNextState(this._getNextState(key.codePointAt(0)));
     }
 
     _onHomeXClicked() {
@@ -166,6 +178,46 @@ class MotorController extends React.Component {
             );
         }
 
+        let buttonControls;
+        if (this.state.controlEnabled) {
+            buttonControls = (
+                <div>
+                    <RaisedButton
+                        label="X-"
+                        onTouchTap={() => this._simulateKeyPress('A')}
+                    />
+                    &nbsp;
+                    <RaisedButton
+                        label="X+"
+                        onTouchTap={() => this._simulateKeyPress('D')}
+                    />
+                    <br/><br/>
+
+                    <RaisedButton
+                        label="Y-"
+                        onTouchTap={() => this._simulateKeyPress('S')}
+                    />
+                    &nbsp;
+                    <RaisedButton
+                        label="Y+"
+                        onTouchTap={() => this._simulateKeyPress('W')}
+                    />
+                    <br/><br/>
+
+                    <RaisedButton
+                        label="F-"
+                        onTouchTap={() => this._simulateKeyPress('V')}
+                    />
+                    &nbsp;
+                    <RaisedButton
+                        label="F+"
+                        onTouchTap={() => this._simulateKeyPress('F')}
+                    />
+                    <br/>
+                </div>
+            );
+        }
+
         return (
             <div>
                 <Snackbar
@@ -214,6 +266,8 @@ class MotorController extends React.Component {
                             defaultValue={1}
                             disabled={!this.state.controlEnabled}
                         />
+
+                        {buttonControls}
 
                         {nextPosition}
                     </div>
